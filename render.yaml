@@ -1,0 +1,21 @@
+# Render Blueprint — CVForge single-service deploy (Express serves API + built React UI)
+# Dashboard → New → Blueprint → select amanverma-bot/CVForge → Apply.
+services:
+  - type: web
+    name: cvforge
+    runtime: node
+    plan: free
+    healthCheckPath: /api/health
+    buildCommand: cd frontend && npm install && npm run build && cd ../backend && npm install --omit=dev --omit=optional
+    startCommand: cd backend && node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGO_URI
+        sync: false # optional: paste MongoDB Atlas URI for persistent Users/CVs/Analyses
+      - key: OPENAI_API_KEY
+        sync: false # optional: enables LLM interviews/cover letters (offline fallback otherwise)
+      - key: FRONTEND_URL
+        value: https://cvforge.onrender.com # update after first deploy if the URL differs
