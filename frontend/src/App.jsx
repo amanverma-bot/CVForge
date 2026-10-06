@@ -151,6 +151,7 @@ function TopNav({ route, go, auth, theme, setTheme }) {
   const appLinks = [['/dashboard', 'Dashboard'], ['/create', 'Create CV'], ['/analyzer', 'CV Analyzer'], ['/match', 'Job Matcher'], ['/interview', 'Interview'], ['/tracker', 'Tracker']];
   const toggle = () => { const n = theme === 'dark' ? 'light' : 'dark'; localStorage.setItem('cvforge_theme', n); setTheme(n) }
   const scrollTo = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+  const navCreate = () => { if (route === '/create') { try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} } else go('/create') }
   const isLanding = route === '/'
   return <div className="mb-4 sticky top-0 z-40 -mx-4 px-4 py-2 backdrop-blur-xl" style={{ background: theme === 'dark' ? 'rgba(2,6,23,.78)' : 'rgba(238,242,247,.85)' }}>
     <div className="max-w-6xl mx-auto flex items-center justify-between gap-2 flex-wrap">
@@ -160,7 +161,7 @@ function TopNav({ route, go, auth, theme, setTheme }) {
         : <div className="hidden md:flex gap-1 flex-wrap">{appLinks.map(([p, l]) => <button key={p} onClick={() => go(p)} className={`px-3 py-1.5 rounded-full text-xs font-bold ${route === p ? 'bg-gradient-to-r from-indigo-500 to-cyan-500 text-white' : 'opacity-70 hover:opacity-100'}`}>{l}</button>)}</div>}
       <div className="text-xs flex gap-2 items-center"><button onClick={toggle} title="Dark / light mode" aria-label="Toggle dark or light mode" className="px-2.5 py-1.5 rounded-full border border-slate-600">{theme === 'dark' ? '🌙' : '☀️'}</button>
         {auth.user ? <button onClick={() => go('/dashboard')} className="px-3 py-1.5 rounded-full border border-slate-600 font-bold">👤 {auth.user}</button>
-          : <><button onClick={() => go('/login')} className="px-3 py-1.5 font-bold opacity-80 hidden sm:block">Log in</button><button onClick={() => go('/create')} className="px-4 py-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500 font-bold text-white shadow-lg">Build My CV</button></>}</div>
+          : <><button onClick={() => go('/login')} className="px-3 py-1.5 font-bold opacity-80 hidden sm:block">Log in</button><button onClick={navCreate} className="px-4 py-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500 font-bold text-white shadow-lg">Build My CV</button></>}</div>
     </div>
   </div>
 }
@@ -185,7 +186,7 @@ function Home({ go }) {
         <div className="inline-block text-[11px] font-bold px-3 py-1 rounded-full border border-indigo-500/40 mb-3" style={{ background: 'rgba(99,102,241,.12)' }}>✨ Free for students • No card required</div>
         <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-[1.05]">Build a CV that<br />gets <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-300">noticed.</span></h1>
         <p className="mt-3 opacity-70 max-w-md">CVForge reads the job, matches it against you, and drafts a tailored resume — then proves the score before you apply.</p>
-        <div className="flex gap-2 mt-5 flex-wrap"><button onClick={() => go('/create')} className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 font-bold text-white shadow-xl">Build My CV →</button><button onClick={() => go('/analyzer')} className="px-6 py-3 rounded-xl border border-slate-600 font-bold">Analyze My CV</button></div>
+        <div className="flex gap-2 mt-5 flex-wrap"><button onClick={navCreate} className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 font-bold text-white shadow-xl">Build My CV →</button><button onClick={() => go('/analyzer')} className="px-6 py-3 rounded-xl border border-slate-600 font-bold">Analyze My CV</button></div>
         <div className="text-[11px] opacity-50 mt-3">PDF + DOCX export • Fresher Mode • Works on mobile</div>
       </div>
       <div className="reveal reveal-d1"><HeroPreview /></div>
@@ -205,7 +206,7 @@ function Home({ go }) {
         <div key={n} className={card} style={n === 'Free' ? { borderColor: 'rgba(99,102,241,.5)', boxShadow: '0 0 30px rgba(99,102,241,.15)' } : {}}><b>{n}</b><div className="text-3xl font-black mt-1">{p}</div><div className="text-xs opacity-60 mt-1 min-h-[48px]">{d}</div><button onClick={() => go(to)} className={`w-full mt-2 py-2.5 rounded-xl font-bold text-sm ${n === 'Free' ? 'bg-gradient-to-r from-indigo-500 to-cyan-500 text-white' : 'border border-slate-600'}`}>{cta}</button></div>)}</div></div>
     {/* about + footer */}
     <div id="lp-about" className={`${card} text-center scroll-mt-24`}><b>About CVForge</b><p className="text-xs opacity-60 mt-1 max-w-lg mx-auto">Built for campus placements: honest, offline-capable analysis that shows what matches, what's missing, and exactly how to fix it — without inventing a single line of experience.</p>
-      <button onClick={() => go('/create')} className="mt-3 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 font-bold text-white">Build My CV →</button></div>
+      <button onClick={navCreate} className="mt-3 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 font-bold text-white">Build My CV →</button></div>
   </div>
 }
 function Login({ go, auth }) {
@@ -317,7 +318,7 @@ function Dashboard({ go, auth }) {
     {/* greeting */}
     <div className="flex items-end justify-between flex-wrap gap-2">
       <div><h2 className="text-2xl font-black tracking-tight">{greet}, {auth.user}</h2><p className="text-xs opacity-60">Career Overview • {doneCount}/{JOURNEY.length} journey stages • {prog.pct}% profile</p></div>
-      <div className="flex gap-2"><button onClick={() => go('/create')} className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 font-bold text-sm text-white">+ New CV</button><button onClick={() => go('/analyzer')} className="px-4 py-2 rounded-xl border border-slate-600 font-bold text-sm">Analyze</button></div>
+      <div className="flex gap-2"><button onClick={navCreate} className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 font-bold text-sm text-white">+ New CV</button><button onClick={() => go('/analyzer')} className="px-4 py-2 rounded-xl border border-slate-600 font-bold text-sm">Analyze</button></div>
     </div>
     {/* career overview grid */}
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -338,7 +339,7 @@ function Dashboard({ go, auth }) {
       {msg && <div className="text-xs mb-2 break-all">{msg}</div>}
       {qr && <div className={`${card} flex items-center gap-3 mb-2`}><img src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(qr)}`} alt="Share QR" className="rounded-lg bg-white p-1 w-[140px] h-[140px]" /><div className="text-xs break-all"><b>Scan to open</b><br />{qr}<br /><span className="opacity-60">QR via qrserver (needs internet); link works regardless.</span></div></div>}
       <div className={`${card} mb-2`}><b className="text-sm">📈 Profile progress — {prog.pct}%</b><div className="h-2 rounded-full bg-slate-800 overflow-hidden mt-1"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500" style={{ width: prog.pct + '%' }}></div></div><div className="text-[11px] opacity-60 mt-1">{prog.done}/{prog.total}: name, email, education, experience, skills, projects — finish in Create CV.</div></div>
-      {!loaded ? skel : !cvs.length ? <div className={card}><span className="text-sm opacity-70">📭 No CVs yet — your first one takes ~2 minutes.</span> <button onClick={() => go('/create')} className="underline text-sm">Create your first CV →</button></div> : null}
+      {!loaded ? skel : !cvs.length ? <div className={card}><span className="text-sm opacity-70">📭 No CVs yet — your first one takes ~2 minutes.</span> <button onClick={navCreate} className="underline text-sm">Create your first CV →</button></div> : null}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {cvs.map((c, i) => { const score = hist[i]?.overall ?? hist[i]?.scoreData?.overall ?? null; return <div key={c._id || c.id || i} className={card}>
           <b className="text-sm">{c.personalInfo?.name || 'Untitled CV'}</b><div className="text-[11px] text-slate-500">{c.template} • {(c.createdAt || '').slice(0, 10)}</div>
@@ -1010,7 +1011,7 @@ function Profile({ auth, go }) {
         : <div className="text-xs mt-1 opacity-80">{pct === 3 ? <span>Targeting <b>{prof.targetRole}</b> • {prof.level} • {prof.location}</span> : <span>Half-finished profile — <button onClick={() => setEditing(true)} className="underline">complete it</button> so Match & Dashboard target the right jobs.</span>}</div>}
     </div>
     {!loaded ? <div className="grid sm:grid-cols-2 gap-3">{[0, 1].map(i => <div key={i} className={card}><div className="h-4 rounded bg-slate-700/60 w-1/2 is-busy"></div><div className="h-3 rounded bg-slate-700/40 mt-2 w-2/3"></div></div>)}</div> : <>
-    <h3 className="font-bold text-sm">Saved CVs</h3>{!cvs.length ? <div className={card}><span className="text-sm opacity-70">📭 No saved CVs yet.</span> <button onClick={() => go('/create')} className="underline text-sm">Create one →</button></div> : cvs.map(c => <div key={c._id || c.id} className={card}><b className="text-sm">{c.personalInfo?.name || 'CV'}</b><span className="text-xs text-slate-500"> • {c.template}{c.role ? ` • 🎯 ${c.role}` : ''}</span></div>)}
+    <h3 className="font-bold text-sm">Saved CVs</h3>{!cvs.length ? <div className={card}><span className="text-sm opacity-70">📭 No saved CVs yet.</span> <button onClick={navCreate} className="underline text-sm">Create one →</button></div> : cvs.map(c => <div key={c._id || c.id} className={card}><b className="text-sm">{c.personalInfo?.name || 'CV'}</b><span className="text-xs text-slate-500"> • {c.template}{c.role ? ` • 🎯 ${c.role}` : ''}</span></div>)}
     <h3 className="font-bold text-sm">Analyses</h3>{!items.length ? <div className={card}><span className="text-sm opacity-70">📭 No analyses yet.</span> <button onClick={() => go('/analyzer')} className="underline text-sm">Run your first →</button></div> : items.map(a => <div key={a.id || a._id} className={card}><b>{a.overall ?? a.scoreData?.overall}/100</b> — {a.verdict || a.scoreData?.verdict}<div className="text-xs text-slate-400">{(a.createdAt || '').slice(0, 16)}</div></div>)}</>}</div>
 }
 
