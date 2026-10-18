@@ -58,14 +58,12 @@ body { background: #020617; }
 }
 /* glowing CTA */
 .glow-btn {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4, #6366f1);
-  background-size: 220% 220%;
-  animation: cf-gradient-pan 8s ease infinite;
-  box-shadow: 0 4px 18px rgba(99, 102, 241, .35), 0 2px 8px rgba(6, 182, 212, .15);
-  transition: transform .15s ease, box-shadow .2s ease, filter .15s ease;
+  background: #2563eb;
+  box-shadow: 0 1px 3px rgba(2, 6, 23, .3);
+  transition: background .15s ease, box-shadow .15s ease;
 }
-.glow-btn:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 8px 26px rgba(139, 92, 246, .45), 0 4px 14px rgba(6, 182, 212, .2); }
-.glow-btn:active:not(:disabled) { transform: scale(.98); }
+.glow-btn:hover:not(:disabled) { background: #1d4ed8; box-shadow: 0 2px 8px rgba(2, 6, 23, .35); }
+.glow-btn:active:not(:disabled) { background: #1e40af; }
 /* big dropzones */
 .dropzone-big {
   border: 2px dashed rgba(148, 163, 184, .45);
@@ -78,21 +76,11 @@ body { background: #020617; }
   color: #cbd5e1;
 }
 .dropzone-big:hover, .dropzone-big.over {
-  border-color: #818cf8;
+  border-color: #60a5fa;
   background: rgba(99, 102, 241, .12);
   transform: scale(1.01);
   box-shadow: 0 0 22px rgba(99, 102, 241, .25);
 }
-.dz-icon { display: inline-block; font-size: 34px; animation: cf-bounce 2.2s ease-in-out infinite; }
-@keyframes cf-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-/* AI particles + floating docs */
-.ai-particles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.ai-particles span { position: absolute; border-radius: 9999px; background: radial-gradient(circle, #67e8f9, transparent 70%); animation: cf-particle linear infinite; }
-@keyframes cf-particle { from { transform: translateY(24px) scale(.6); opacity: 0; } 20% { opacity: .55; } to { transform: translateY(-160px) scale(1); opacity: 0; } }
-.float-doc { position: absolute; pointer-events: none; filter: drop-shadow(0 6px 14px rgba(99,102,241,.4)); animation: cf-floatY 6s ease-in-out infinite; }
-@keyframes cf-floatY { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-12px) rotate(4deg); } }
-/* 3D score */
-.score-3d { transform: perspective(700px) rotateY(-8deg); filter: drop-shadow(0 0 22px rgba(99, 102, 241, .55)); }
 /* tier badge */
 .tier-badge { display: inline-block; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 800; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
 /* color-coded result sections */
@@ -123,7 +111,7 @@ body { background: #020617; }
   50% { transform: rotateY(-11deg) rotateX(3deg) translateY(-12px); }
 }
 /* journey connector */
-.journey-line { background: linear-gradient(90deg, #6366f1, #06b6d4); height: 3px; border-radius: 999px; }
+.journey-line { background: linear-gradient(90deg, #2563eb, #06b6d4); height: 3px; border-radius: 999px; }
 
 /* subtle scroll-free reveal (plays once on mount) */
 .reveal { animation: cf-fade-up .55s ease both; }
@@ -150,15 +138,15 @@ body { background: #020617; }
 .a4 li { margin: 2px 0; color: #1f2937; }
 .a4 .a4-block { margin: 5px 0; }
 .a4 .a4-note { margin-top: 10px; font-size: 10px; color: #6b7280; font-style: italic; }
-.a4.modern h2 { color: #4f46e5; }
-.a4.modern h4 { color: #4f46e5; border-color: #4f46e5; }
+.a4.modern h2 { color: #1d4ed8; }
+.a4.modern h4 { color: #1d4ed8; border-color: #1d4ed8; }
 .a4.classic { font-family: Georgia, 'Times New Roman', serif; }
 .a4.classic h4 { border-bottom-style: double; }
 .a4.minimal h4 { border: none; color: #6b7280; }
 .a4.minimal h2 { font-weight: 600; }
 .a4.neon { background: #0f172a; color: #e2e8f0; }
-.a4.neon h2 { color: #a5b4fc; }
-.a4.neon h4 { color: #a5b4fc; border-color: #6366f1; }
+.a4.neon h2 { color: #93c5fd; }
+.a4.neon h4 { color: #93c5fd; border-color: #2563eb; }
 .a4.neon p, .a4.neon li { color: #cbd5e1; }
 .a4.neon .a4-contact { color: #94a3b8; }
 .a4.professional h2 { color: #1e3a5f; letter-spacing: .02em; }
@@ -211,6 +199,6 @@ button:disabled {
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .anim-page, .anim-page > *, .anim-pop, .score-ring, .is-busy, .cv3d, .dz-icon, .float-doc, .glow-btn, .ai-particles span { animation: none !important; }
+  .anim-page, .anim-page > *, .anim-pop, .score-ring, .is-busy, .cv3d { animation: none !important; }
   button:not(:disabled) { transition: none; }
 }
