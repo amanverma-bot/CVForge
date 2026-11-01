@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -14,7 +14,7 @@ import { initializeTheme } from '@/store/useStore';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/utils';
 
-// Pages
+// Pages (lazy-loaded with Suspense boundaries)
 const Landing = React.lazy(() => import('./pages/Landing'));
 const Login = React.lazy(() => import('./pages/Login'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -36,18 +36,23 @@ function RequireAuth({ children }) {
   return children;
 }
 
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+      <div className="text-center">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-sm text-muted-foreground">Loading CVForge…</p>
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  const [mounted, setMounted] = useState(false);
   const { theme, setTheme, isAuthenticated } = useStore();
 
   useEffect(() => {
     initializeTheme();
-    setMounted(true);
   }, []);
-
-  if (!mounted) {
-    return null;
-  }
 
   return (
     <BrowserRouter>
@@ -60,41 +65,43 @@ function App() {
           className="cn"
         />
         <Navbar />
-        {isAuthenticated ? (
-          <div className="flex">
-            <Sidebar />
-            <main className="flex-1 md:pl-64 pt-16 pb-24">
+        <Suspense fallback={<LoadingFallback />}>
+          {isAuthenticated ? (
+            <div className="flex">
+              <Sidebar />
+              <main className="flex-1 md:pl-64 pt-16 pb-24">
+                <Routes>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/create" element={<Create />} />
+                  <Route path="/analyzer" element={<Analyzer />} />
+                  <Route path="/match" element={<Matcher />} />
+                  <Route path="/tracker" element={<Tracker />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/templates" element={<Templates />} />
+                  <Route path="/privacy" element={<Privacy />} />
+                  <Route path="/terms" element={<Terms />} />
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+              </main>
+            </div>
+          ) : (
+            <main className="pt-16 pb-24">
               <Routes>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/create" element={<Create />} />
-                <Route path="/analyzer" element={<Analyzer />} />
-                <Route path="/match" element={<Matcher />} />
-                <Route path="/tracker" element={<Tracker />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/templates" element={<Templates />} />
+                <Route path="/" element={<Landing />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/create" element={<Navigate to="/login" replace />} />
+                <Route path="/analyzer" element={<Navigate to="/login" replace />} />
+                <Route path="/match" element={<Navigate to="/login" replace />} />
+                <Route path="/tracker" element={<Navigate to="/login" replace />} />
+                <Route path="/settings" element={<Navigate to="/login" replace />} />
+                <Route path="/templates" element={<Navigate to="/login" replace />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>
-          </div>
-        ) : (
-          <main className="pt-16 pb-24">
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/create" element={<Navigate to="/login" replace />} />
-              <Route path="/analyzer" element={<Navigate to="/login" replace />} />
-              <Route path="/match" element={<Navigate to="/login" replace />} />
-              <Route path="/tracker" element={<Navigate to="/login" replace />} />
-              <Route path="/settings" element={<Navigate to="/login" replace />} />
-              <Route path="/templates" element={<Navigate to="/login" replace />} />
-              <Route path="/privacy" element={<Privacy />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-        )}
+          )}
+        </Suspense>
         <Footer />
       </div>
     </BrowserRouter>
