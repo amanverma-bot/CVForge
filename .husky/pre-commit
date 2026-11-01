@@ -1,0 +1,4 @@
+#!/bin/sh
+# CVForge pre-commit: format + lint staged files.
+# Termux-safe: calls node directly (no /usr/bin/env there).
+node ./node_modules/lint-staged/bin/lint-staged.js

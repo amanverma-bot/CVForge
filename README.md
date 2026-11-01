@@ -1,48 +1,113 @@
 # 🔨 CVForge — Create. Analyze. Improve.
-React + Tailwind • Node/Express • MongoDB • JWT • AI Service • PDF/DOCX Parser
+
+React + Tailwind (neo-brutalist) • Node/Express • MongoDB • JWT • AI Service • PDF/DOCX parser.
+Production-grade: pino logging, centralized error handling, helmet + rate limits + Zod validation, Vitest test suites, ESLint/Prettier + Husky hooks, GitHub Actions CI, Swagger docs.
 
 ```
 ┌─────────────────────┐
 │      React UI       │  frontend/src/App.jsx — #/ #/login #/dashboard #/create
-│  CV Creator/Upload  │  #/preview #/analyzer #/match #/profile #/templates #/settings
+│  CV Creator/Upload  │  #/preview #/analyzer #/match #/interview #/tracker ...
 └──────────┬──────────┘
-           │  REST API (JSON + multipart)
+           │  REST API (JSON + multipart) — Bearer JWT on every route
 ┌──────────▼──────────┐
-│   Node.js/Express   │  backend/server.js — rate-limited, memory-only uploads
-└───────┬───────┬─────┘  (5MB, PDF/DOCX/TXT/MD, never touch disk)
+│   Node.js/Express   │  backend/app.js + routes/*.js — helmet, CORS allow-list,
+└───────┬───────┬─────┘  rate limits, Zod validation, pino logs, memory-only uploads
         │       │
 ┌───────▼───┐ ┌─▼──────────┐
-│  MongoDB  │ │ AI Service │  store.js (Users/CVs/Analyses) • services/aiService.js
-└───────────┘ └────────────┘  (LLM when OPENAI_API_KEY, else offline scoring)
+│  MongoDB  │ │ AI Service │  store.js (Users/CVs/Analyses/Applications)
+└───────────┘ └────────────┘  aiService.js → llm.js (LLM when key) + scoring.js (offline)
         │
 ┌───────▼───────────┐
-│ PDF/DOCX Parser   │  services/parserService.js + lib/parse.js (pdf-parse/mammoth)
-└───────────────────┘  + JD-URL fetch with SSRF guard
+│ PDF/DOCX Parser   │  parserService.js + lib/parse.js (pdf-parse/mammoth)
+└───────────────────┘  + JD-URL fetch with SSRF guard, magic-byte file checks
 ```
 
-## Collections
-- **Users** {_id, name, email, passwordHash} — bcrypt + JWT 7d
-- **CVs** {_id, userId, personalInfo, education, experience, skills, projects, template, createdAt}
-- **Analyses** {_id, userId, cvId, scoreData, missingKeywords, suggestions, createdAt}
+## Run (dev)
 
-## Run (single origin — one URL serves UI + API, no CORS / 127.0.0.1 problem)
 ```bash
-cd ~/cv_mern/backend && npm install && cp .env.example .env  # then edit JWT_SECRET!
-cd ~/cv_mern/frontend && npm install && npm run build        # fixed for Termux (no /usr/bin/env there)
-cd ~/cv_mern/backend && PORT=5001 node server.js &           # serves API + frontend/dist on :5001
-# open http://127.0.0.1:5001  (hash routes #/analyzer etc. — API calls are same-origin;
-# VITE_API_URL only needed for split hosting, e.g. Netlify + Render)
+# Backend  (API on :5001)
+cd backend && npm install && cp .env.example .env   # edit JWT_SECRET
+npm run dev
+
+# Frontend (Vite on :5173, proxies /api → :5001 — no CORS in dev)
+cd frontend && npm install && npm run dev
 ```
 
-## MongoDB persistence (Atlas — Termux can't run mongod itself)
-1. https://cloud.mongodb.com → free M0 cluster → Database Access user + Network Access `0.0.0.0/0` (dev) → Connect → **Node.js** → copy URI
-2. `backend/.env`: `MONGO_URI=mongodb+srv://USER:PASS@cluster0.xxx.mongodb.net/cvforge`
-3. Restart backend → `/api/health` shows `"mongo":true` (`false` = in-memory, wiped on restart)
-4. Collections auto-created: **Users** / **CVs** / **Analyses** (schema above)
+Open http://127.0.0.1:5173 — Vite proxies `/api/*` to Express (see `vite.config.js`),
+so both dev and prod talk same-origin.
 
-## Phases — all done ✓
-1. **Creator**: 6-step form, live preview, modern/classic/minimal/neon, PDF download
-2. **Upload**: PDF/DOCX/TXT multipart → text → structured `{name, education, skills, experience, projects}`
-3. **Analyzer**: sections, skills, missing, keywords, formatting + honest suggestions (gaps shown as “add if truthful (Familiar)” — never invents)
-4. **Matcher**: `POST /api/match` ranks one CV vs many JDs with present/missing per job
-5. **Production**: login/signup, saved CVs, dashboard, in-memory→Atlas, rate limits, file restrictions, deployment-ready
+## Run (production, single origin)
+
+```bash
+cd frontend && npm install && npm run build     # emits frontend/dist
+cd ../backend && npm install --omit=dev
+NODE_ENV=production JWT_SECRET=$(openssl rand -hex 32) node server.js
+# Express serves the built SPA + API on one URL
+```
+
+## Environment (`backend/.env`)
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `PORT` | 5001 | API port |
+| `JWT_SECRET` | dev default | **Required in prod** (≥32 chars, `openssl rand -hex 32`) |
+| `MONGO_URI` | empty | Atlas URI; empty = in-memory store (wiped on restart) |
+| `FRONTEND_URL` | localhost:5173 | Comma-separated CORS allow-list |
+| `ADMIN_PASSWORD` | empty | ≥12 chars to seed `admin`; unset = no admin account |
+| `OPENAI_API_KEY` | empty | LLM features; empty = offline scoring fallback |
+| `LOG_LEVEL` | info | pino level (`silent` for tests) |
+| `TRUST_PROXY` | loopback | `1` behind Render/nginx, `loopback` for local tunnels |
+| `FORCE_HTTPS` | false | Enable when TLS terminates at the proxy |
+| `ALLOW_TUNNEL_ORIGINS` | false | Dev-only: accept rotating trycloudflare origins |
+| `RATE_LIMIT_ENABLED` | true | Kill-switch for rate limits (tests set false) |
+
+Full list + docs: `backend/.env.example`. Config is validated with Zod at startup —
+production **fails fast** on weak secrets or malformed values.
+
+## Scripts
+
+| Where | Command | What |
+|-------|---------|------|
+| root | `npm run lint` | ESLint across backend + frontend |
+| root | `npm run format` | Prettier write |
+| root | `npm test` | backend + frontend test suites |
+| backend | `npm test` | Vitest + supertest (unit + API security/IDOR tests) |
+| frontend | `npm test` | Vitest + React Testing Library (component tests) |
+| frontend | `npm run build` | Vite production build |
+
+Git hooks: Husky runs `lint-staged` (Prettier + ESLint --fix on staged files) pre-commit.
+
+## API documentation
+
+- Swagger UI: `GET /api/docs` (served by the app)
+- OpenAPI spec: `GET /api/openapi.json` (source: `backend/docs/openapi.json`)
+
+## Security
+
+See **[SECURITY.md](SECURITY.md)** — full control map: auth on every route, ownership
+scoping (no IDOR), captcha on register, Zod validation/sanitization, helmet headers,
+locked CORS, rate limiting, audit logging, magic-byte upload verification, no default
+admin credentials, `npm audit` clean (CI enforces).
+
+## Testing & CI
+
+- Backend: 49 tests — scoring units + API integration (auth, captcha, IDOR, validation,
+  upload sniffing, CORS, headers, JSON error shapes).
+- Frontend: component tests for landing, login gate, 404.
+- `.github/workflows/ci.yml`: lint job, backend job (tests + audit ≥high fails),
+  frontend job (tests + build + audit) on every PR to `main`.
+
+## Design system — Neo-brutalism (charcoal / forest / crimson)
+
+Tokens in `frontend/src/index.css`: `--ink:#1A1A1A`, `--forest:#1B4332`,
+`--crimson:#C1121F`, paper `#F6F1E7`; 0px radius, 2–4px visible borders, hard offset
+shadows, visible grid, 700–900 typography (Inter + JetBrains Mono), visible focus rings,
+reduced-motion support, light & dark themes. The CV renderer additionally ships a
+**Brutal** template (plus modern/minimal/professional/tech/fresher/classic/neon).
+
+## Deployment (Render blueprint)
+
+`render.yaml` provisions one web service: builds the SPA, serves API + UI from Express,
+health check `/api/health`, generates `JWT_SECRET`, sets `NODE_ENV=production`,
+`TRUST_PROXY=1`, `FORCE_HTTPS=true`. Add `MONGO_URI` for persistence and
+`OPENAI_API_KEY` for LLM upgrades.

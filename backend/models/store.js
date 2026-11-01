@@ -1,183 +1,286 @@
-// Collections (exact schema):
-//   Users        {_id, name, email, passwordHash, createdAt}
-//   CVs          {_id, userId, personalInfo, education, experience, skills, projects, template, shareToken, createdAt}
-//   Analyses     {_id, userId, cvId, scoreData, missingKeywords, suggestions, createdAt}
-//   Applications {_id, userId, title, company, status, notes, createdAt}
-const STATUSES = ["wishlist", "applied", "screening", "interview", "offer", "rejected"];
-const memory = { users: new Map(), cvs: new Map(), analyses: [], applications: new Map(), seq: 1 };
-let useMongo = false;
-let User, CV, Analysis, Application;
-const newToken = () => require("crypto").randomBytes(12).toString("hex");
+// ── Data Store ─────────────────────────────────────────────────────────────
+// MongoDB-backed store with in-memory fallback for demo/development.
+// All queries are scoped by userId — no IDOR possible.
 
-async function initDB() {
-  const uri = process.env.MONGO_URI;
-  if (!uri) { console.log("ℹ️  No MONGO_URI — in-memory Users/CVs/Analyses (set MONGO_URI for Atlas)"); return { useMongo: false }; }
-  const mongoose = require("mongoose");
-  await mongoose.connect(uri);
-  useMongo = true;
-  User = mongoose.models.User || mongoose.model("User", new mongoose.Schema({
-    name: { type: String, unique: true }, email: { type: String, unique: true, sparse: true },
-    passwordHash: String, createdAt: { type: Date, default: Date.now },
-  }));
-  CV = mongoose.models.CV || mongoose.model("CV", new mongoose.Schema({
-    userId: String, personalInfo: Object, education: String, experience: String,
-    skills: String, projects: String, template: { type: String, default: "modern" },
-    role: { type: String, default: "" }, generatedText: { type: String, default: "" },
-    shareToken: { type: String, unique: true, sparse: true },
-    createdAt: { type: Date, default: Date.now },
-  }));
-  Application = mongoose.models.Application || mongoose.model("Application", new mongoose.Schema({
-    userId: String, title: String, company: String,
-    status: { type: String, default: "wishlist" }, notes: String,
-    remindAt: { type: String, default: null }, // ISO date for follow-up reminders
-    createdAt: { type: Date, default: Date.now },
-  }));
-  Analysis = mongoose.models.Analysis || mongoose.model("Analysis", new mongoose.Schema({
-    userId: String, cvId: { type: String, default: null },
-    scoreData: Object, missingKeywords: [String], suggestions: [String],
-    overall: Number, verdict: String, cvText: String, jdText: String, resultJson: String,
-    createdAt: { type: Date, default: Date.now },
-  }));
-  console.log("✅ MongoDB connected (Users/CVs/Analyses)");
-  return { useMongo: true };
-}
+let isMongo = false;
+let db = null;
+let client = null;
 
-// ---- Users (login id = name; email unique) ----
-async function findUser(identifier) {
-  const id = String(identifier || "").trim();
-  if (useMongo) return User.findOne({ $or: [{ name: id }, { email: id }] });
-  return memory.users.get(id.toLowerCase()) || [...memory.users.values()].find(u => (u.email || "").toLowerCase() === id.toLowerCase()) || null;
-}
-// New signature: {name, email, passwordHash}. Legacy {username, password} also accepted.
-async function createUser({ name, username, email, password, passwordHash }) {
-  const nm = String(name || username || "").trim();
-  const em = String(email || "").trim();
-  const hash = passwordHash || password || "";
-  if (!nm) { const e = new Error("name required"); e.code = 400; throw e; }
-  if (useMongo) {
-    // bcrypt hashes start with $2 — store as-is
-    return User.create({ name: nm, email: em || undefined, passwordHash: hash });
+// In-memory fallback
+const memoryStore = {
+  users: [],
+  cvs: [],
+  analyses: [],
+  applications: [],
+  captchas: [],
+};
+
+async function connect(mongoUri) {
+  if (!mongoUri) {
+    isMongo = false;
+    return;
   }
-  if (memory.users.has(nm.toLowerCase())) { const e = new Error("exists"); e.code = 11000; throw e; }
-  const u = { _id: String(memory.seq++), id: String(memory.seq - 1), name: nm, username: nm, email: em, password: hash, passwordHash: hash, createdAt: new Date().toISOString() };
-  memory.users.set(nm.toLowerCase(), u);
-  return u;
+  try {
+    const { MongoClient } = require("mongoose");
+    await mongoose.connect(mongoUri, {
+      serverSelectionTimeoutMS: 5000,
+    });
+    isMongo = true;
+    console.log("✓ Connected to MongoDB");
+  } catch (err) {
+    console.warn("⚠️  MongoDB connection failed, using in-memory store:", err.message);
+    isMongo = false;
+  }
 }
 
-// ---- CVs ----
-async function createCV({ userId, personalInfo = {}, education = "", experience = "", skills = "", projects = "", template = "modern", role = "", generatedText = "" }) {
-  if (useMongo) { const c = await CV.create({ userId: String(userId), personalInfo, education, experience, skills, projects, template, role: String(role).slice(0,120), generatedText: String(generatedText).slice(0, 20000) }); return { id: c._id }; }
-  const id = memory.seq++;
-  const c = { _id: String(id), id, userId: String(userId), personalInfo, education, experience, skills, projects, template, role: String(role).slice(0,120), generatedText: String(generatedText).slice(0, 20000), createdAt: new Date().toISOString() };
-  memory.cvs.set(String(id), c);
-  return { id };
+function isMongoConnected() {
+  return isMongo;
 }
-async function listCVs(userId, limit = 20) {
-  if (useMongo) return CV.find({ userId: String(userId) }).sort({ createdAt: -1 }).limit(limit);
-  return [...memory.cvs.values()].filter(c => c.userId === String(userId)).slice(-limit).reverse();
+
+// ── User operations ──
+async function createUser({ name, email, passwordHash }) {
+  if (isMongo) {
+    const User = mongoose.model("User");
+    const existing = await User.findOne({ $or: [{ name }, ...(email ? [{ email }] : [])] });
+    if (existing) throw Object.assign(new Error("Name/email already exists"), { code: 11000 });
+    const user = new User({ name, email, passwordHash });
+    await user.save();
+    return { id: user._id.toString(), name, email, role: "free" };
+  }
+  // In-memory
+  const existing = memoryStore.users.find(
+    (u) => u.name === name || (email && u.email === email)
+  );
+  if (existing) throw Object.assign(new Error("Name/email already exists"), { code: 11000 });
+  const id = Math.random().toString(36).slice(2, 11);
+  const user = { id, name, email, passwordHash, role: "free", createdAt: new Date().toISOString() };
+  memoryStore.users.push(user);
+  return { id, name, email, role: "free" };
 }
+
+async function findUser(name) {
+  if (isMongo) {
+    const User = mongoose.model("User");
+    const user = await User.findOne({ name });
+    if (!user) return null;
+    return { id: user._id.toString(), name: user.name, email: user.email, passwordHash: user.passwordHash, role: user.role };
+  }
+  return memoryStore.users.find((u) => u.name === name) || null;
+}
+
+async function getUserById(id) {
+  if (isMongo) {
+    const User = mongoose.model("User");
+    const user = await User.findById(id);
+    if (!user) return null;
+    return { id: user._id.toString(), name: user.name, email: user.email, role: user.role };
+  }
+  return memoryStore.users.find((u) => u.id === id) || null;
+}
+
+// ── CV operations ──
+async function createCV({ userId, ...data }) {
+  if (isMongo) {
+    const CV = mongoose.model("CV");
+    const cv = new CV({ userId, ...data });
+    await cv.save();
+    return cv.toObject ? cv.toObject() : cv;
+  }
+  const id = Math.random().toString(36).slice(2, 11);
+  const cv = { id, userId, ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  memoryStore.cvs.push(cv);
+  return cv;
+}
+
+async function listCVs(userId) {
+  if (isMongo) {
+    const CV = mongoose.model("CV");
+    return CV.find({ userId }).sort({ createdAt: -1 }).lean();
+  }
+  return memoryStore.cvs.filter((c) => c.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
 async function getCV(id, userId) {
-  if (useMongo) return CV.findOne({ _id: id, userId: String(userId) });
-  const c = memory.cvs.get(String(id));
-  return c && c.userId === String(userId) ? c : null;
-}
-// Shareable read-only link: POST /api/cvs/:id/share → {token}; GET /api/share/:token (public)
-async function shareCV(id, userId) {
-  if (useMongo) {
-    const c = await CV.findOne({ _id: id, userId: String(userId) });
-    if (!c) return null;
-    if (!c.shareToken) { c.shareToken = newToken(); await c.save(); }
-    return { token: c.shareToken };
+  if (isMongo) {
+    const CV = mongoose.model("CV");
+    return CV.findOne({ _id: id, userId }).lean();
   }
-  const c = memory.cvs.get(String(id));
-  if (!c || c.userId !== String(userId)) return null;
-  if (!c.shareToken) c.shareToken = newToken();
-  return { token: c.shareToken };
-}
-async function getShared(token) {
-  if (useMongo) return CV.findOne({ shareToken: String(token) });
-  return [...memory.cvs.values()].find(c => c.shareToken === String(token)) || null;
+  return memoryStore.cvs.find((c) => c.id === id && c.userId === userId) || null;
 }
 
-// ---- Privacy: revoke share, export everything, delete account ----
+async function shareCV(id, userId) {
+  if (isMongo) {
+    const CV = mongoose.model("CV");
+    const cv = await CV.findOne({ _id: id, userId });
+    if (!cv) return null;
+    const token = Math.random().toString(36).slice(2, 14);
+    cv.shareToken = token;
+    cv.sharedAt = new Date();
+    await cv.save();
+    return { token, url: `/s/${token}` };
+  }
+  const cv = memoryStore.cvs.find((c) => c.id === id && c.userId === userId);
+  if (!cv) return null;
+  const token = Math.random().toString(36).slice(2, 14);
+  cv.shareToken = token;
+  cv.sharedAt = new Date().toISOString();
+  return { token, url: `/s/${token}` };
+}
+
 async function revokeShare(id, userId) {
-  if (useMongo) { const c = await CV.findOneAndUpdate({ _id: id, userId: String(userId) }, { $unset: { shareToken: 1 } }, { new: true }); return !!c; }
-  const c = memory.cvs.get(String(id));
-  if (!c || c.userId !== String(userId)) return false;
-  delete c.shareToken;
+  if (isMongo) {
+    const CV = mongoose.model("CV");
+    const cv = await CV.findOneAndUpdate({ _id: id, userId }, { $unset: { shareToken: 1, sharedAt: 1 } });
+    return !!cv;
+  }
+  const cv = memoryStore.cvs.find((c) => c.id === id && c.userId === userId);
+  if (!cv) return false;
+  delete cv.shareToken;
+  delete cv.sharedAt;
   return true;
 }
-async function exportUserData(userId) {
-  const uid = String(userId);
-  const user = await findUser(uid) || [...(useMongo ? [] : memory.users.values())].find(u => String(u._id || u.id) === uid);
-  const cvs = await listCVs(uid, 100);
-  const analyses = await listAnalyses(uid, 100);
-  const applications = await listApplications(uid);
-  const safeUser = user ? { name: user.name || user.username, email: user.email, createdAt: user.createdAt } : null;
-  return { exportedAt: new Date().toISOString(), user: safeUser, cvs, analyses, applications };
+
+async function getShared(token) {
+  if (isMongo) {
+    const CV = mongoose.model("CV");
+    return CV.findOne({ shareToken: token }).lean();
+  }
+  return memoryStore.cvs.find((c) => c.shareToken === token) || null;
 }
+
+// ── Analysis operations ──
+async function saveAnalysis({ userId, cvId, scoreData, missingKeywords, suggestions, overall, verdict, cvText, jdText, resultJson }) {
+  if (isMongo) {
+    const Analysis = mongoose.model("Analysis");
+    const analysis = new Analysis({ userId, cvId, scoreData, missingKeywords, suggestions, overall, verdict, cvText, jdText, resultJson });
+    await analysis.save();
+    return analysis.toObject ? analysis.toObject() : analysis;
+  }
+  const id = Math.random().toString(36).slice(2, 11);
+  const analysis = { id, userId, cvId, scoreData, missingKeywords, suggestions, overall, verdict, cvText, jdText, resultJson, createdAt: new Date().toISOString() };
+  memoryStore.analyses.push(analysis);
+  return analysis;
+}
+
+async function listAnalyses(userId) {
+  if (isMongo) {
+    const Analysis = mongoose.model("Analysis");
+    return Analysis.find({ userId }).sort({ createdAt: -1 }).lean();
+  }
+  return memoryStore.analyses.filter((a) => a.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+// ── Application operations ──
+const STATUSES = ["wishlist", "applied", "screening", "interview", "offer", "rejected"];
+
+async function createApplication({ userId, ...data }) {
+  if (isMongo) {
+    const Application = mongoose.model("Application");
+    const app = new Application({ userId, ...data });
+    await app.save();
+    return app.toObject ? app.toObject() : app;
+  }
+  const id = Math.random().toString(36).slice(2, 11);
+  const app = { id, userId, ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  memoryStore.applications.push(app);
+  return app;
+}
+
+async function listApplications(userId) {
+  if (isMongo) {
+    const Application = mongoose.model("Application");
+    return Application.find({ userId }).sort({ createdAt: -1 }).lean();
+  }
+  return memoryStore.applications.filter((a) => a.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+async function updateApplication(id, userId, data) {
+  if (isMongo) {
+    const Application = mongoose.model("Application");
+    const app = await Application.findOneAndUpdate({ _id: id, userId }, { $set: { ...data, updatedAt: new Date() } }, { new: true }).lean();
+    return app;
+  }
+  const app = memoryStore.applications.find((a) => a.id === id && a.userId === userId);
+  if (!app) return null;
+  Object.assign(app, data, { updatedAt: new Date().toISOString() });
+  return app;
+}
+
+async function deleteApplication(id, userId) {
+  if (isMongo) {
+    const Application = mongoose.model("Application");
+    const res = await Application.deleteOne({ _id: id, userId });
+    return res.deletedCount > 0;
+  }
+  const idx = memoryStore.applications.findIndex((a) => a.id === id && a.userId === userId);
+  if (idx === -1) return false;
+  memoryStore.applications.splice(idx, 1);
+  return true;
+}
+
+// ── Privacy operations ──
+async function exportUserData(userId) {
+  if (isMongo) {
+    const User = mongoose.model("User");
+    const CV = mongoose.model("CV");
+    const Analysis = mongoose.model("Analysis");
+    const Application = mongoose.model("Application");
+    const [user, cvs, analyses, apps] = await Promise.all([
+      User.findById(userId).lean(),
+      CV.find({ userId }).lean(),
+      Analysis.find({ userId }).lean(),
+      Application.find({ userId }).lean(),
+    ]);
+    return { user, cvs, analyses, applications: apps };
+  }
+  return {
+    user: memoryStore.users.find((u) => u.id === userId),
+    cvs: memoryStore.cvs.filter((c) => c.userId === userId),
+    analyses: memoryStore.analyses.filter((a) => a.userId === userId),
+    applications: memoryStore.applications.filter((a) => a.userId === userId),
+  };
+}
+
 async function deleteAccount(userId) {
-  const uid = String(userId);
-  if (useMongo) {
-    const u = await User.findOne({ $or: [{ name: uid }, { email: uid }, { _id: uid }] }).catch(() => null);
-    const key = u ? u._id : uid;
-    await CV.deleteMany({ userId: String(key) });
-    await Analysis.deleteMany({ userId: String(key) });
-    await Application.deleteMany({ userId: String(key) });
-    if (u) await User.deleteOne({ _id: u._id });
+  if (isMongo) {
+    const User = mongoose.model("User");
+    const CV = mongoose.model("CV");
+    const Analysis = mongoose.model("Analysis");
+    const Application = mongoose.model("Application");
+    await Promise.all([
+      User.deleteOne({ _id: userId }),
+      CV.deleteMany({ userId }),
+      Analysis.deleteMany({ userId }),
+      Application.deleteMany({ userId }),
+    ]);
     return true;
   }
-  for (const [k, c] of [...memory.cvs]) if (c.userId === uid) memory.cvs.delete(k);
-  memory.analyses = memory.analyses.filter(a => a.userId !== uid);
-  for (const [k, a] of [...memory.applications]) if (a.userId === uid) memory.applications.delete(k);
-  for (const [k, u] of [...memory.users]) if (String(u._id || u.id) === uid || (u.name || u.username) === uid) memory.users.delete(k);
-  return true;
-}
-async function createApplication({ userId, title = "", company = "", status = "wishlist", notes = "", remindAt = null }) {
-  if (!STATUSES.includes(status)) status = "wishlist";
-  if (remindAt) remindAt = String(remindAt).slice(0, 16);
-  if (useMongo) { const a = await Application.create({ userId: String(userId), title: String(title).slice(0, 120), company: String(company).slice(0, 120), status, notes: String(notes).slice(0, 2000), remindAt: remindAt || null }); return { id: a._id }; }
-  const id = memory.seq++;
-  const a = { _id: String(id), id, userId: String(userId), title: String(title).slice(0, 120), company: String(company).slice(0, 120), status, notes: String(notes).slice(0, 2000), remindAt: remindAt || null, createdAt: new Date().toISOString() };
-  memory.applications.set(String(id), a);
-  return { id };
-}
-async function listApplications(userId) {
-  if (useMongo) return Application.find({ userId: String(userId) }).sort({ createdAt: -1 });
-  return [...memory.applications.values()].filter(a => a.userId === String(userId)).reverse();
-}
-async function updateApplication(id, userId, patch = {}) {
-  const allowed = {};
-  if (patch.title !== undefined) allowed.title = String(patch.title).slice(0, 120);
-  if (patch.company !== undefined) allowed.company = String(patch.company).slice(0, 120);
-  if (patch.notes !== undefined) allowed.notes = String(patch.notes).slice(0, 2000);
-  if (patch.remindAt !== undefined) allowed.remindAt = patch.remindAt ? String(patch.remindAt).slice(0, 16) : null;
-  if (patch.status !== undefined && STATUSES.includes(patch.status)) allowed.status = patch.status;
-  if (useMongo) return Application.findOneAndUpdate({ _id: id, userId: String(userId) }, allowed, { new: true });
-  const a = memory.applications.get(String(id));
-  if (!a || a.userId !== String(userId)) return null;
-  Object.assign(a, allowed);
-  return a;
-}
-async function deleteApplication(id, userId) {
-  if (useMongo) { const r = await Application.deleteOne({ _id: id, userId: String(userId) }); return r.deletedCount > 0; }
-  const a = memory.applications.get(String(id));
-  if (!a || a.userId !== String(userId)) return false;
-  memory.applications.delete(String(id));
+  memoryStore.users = memoryStore.users.filter((u) => u.id !== userId);
+  memoryStore.cvs = memoryStore.cvs.filter((c) => c.userId !== userId);
+  memoryStore.analyses = memoryStore.analyses.filter((a) => a.userId !== userId);
+  memoryStore.applications = memoryStore.applications.filter((a) => a.userId !== userId);
   return true;
 }
 
-// ---- Analyses (new shape + legacy compat) ----
-async function saveAnalysis({ userId, cvId = null, scoreData = {}, missingKeywords = [], suggestions = [], overall, verdict, cvText = "", jdText = "", resultJson = "" }) {
-  if (!Object.keys(scoreData).length && resultJson) { try { scoreData = JSON.parse(resultJson).scores || {}; } catch {} }
-  if (useMongo) { const a = await Analysis.create({ userId: String(userId), cvId, scoreData, missingKeywords, suggestions, overall, verdict, cvText: String(cvText).slice(0, 8000), jdText: String(jdText).slice(0, 8000), resultJson: String(resultJson).slice(0, 30000) }); return { id: a._id }; }
-  const a = { id: memory.seq++, _id: String(memory.seq - 1), userId: String(userId), cvId, scoreData, missingKeywords, suggestions, overall, verdict, cvText: String(cvText).slice(0, 8000), jdText: String(jdText).slice(0, 8000), resultJson: String(resultJson).slice(0, 30000), createdAt: new Date().toISOString() };
-  memory.analyses.push(a);
-  return { id: a.id };
-}
-async function listAnalyses(userId, limit = 20) {
-  if (useMongo) return Analysis.find({ userId: String(userId) }).sort({ createdAt: -1 }).limit(limit);
-  return memory.analyses.filter(a => a.userId === String(userId)).slice(-limit).reverse();
-}
-
-module.exports = { initDB, findUser, createUser, createCV, listCVs, getCV, shareCV, getShared, revokeShare, createApplication, listApplications, updateApplication, deleteApplication, STATUSES, exportUserData, deleteAccount, saveAnalysis, listAnalyses, isMongo: () => useMongo };
+module.exports = {
+  connect,
+  isMongo: isMongoConnected,
+  createUser,
+  findUser,
+  getUserById,
+  createCV,
+  listCVs,
+  getCV,
+  shareCV,
+  revokeShare,
+  getShared,
+  saveAnalysis,
+  listAnalyses,
+  createApplication,
+  listApplications,
+  updateApplication,
+  deleteApplication,
+  exportUserData,
+  deleteAccount,
+  STATUSES,
+};

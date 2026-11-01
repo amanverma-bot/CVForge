@@ -6,16 +6,26 @@ services:
     runtime: node
     plan: free
     healthCheckPath: /api/health
-    buildCommand: cd frontend && npm install && npm run build && cd ../backend && npm install --omit=dev --omit=optional
+    buildCommand: cd frontend && npm install && npm run build && cd ../backend && npm install --omit=dev
     startCommand: cd backend && node server.js
     envVars:
       - key: NODE_VERSION
         value: 20.18.0
+      - key: NODE_ENV
+        value: production
       - key: JWT_SECRET
         generateValue: true
+      - key: TRUST_PROXY
+        value: "1" # Render terminates TLS in front of the app
+      - key: FORCE_HTTPS
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
       - key: MONGO_URI
-        sync: false # optional: paste MongoDB Atlas URI for persistent Users/CVs/Analyses
+        sync: false # optional: MongoDB Atlas URI for persistent Users/CVs/Analyses
       - key: OPENAI_API_KEY
         sync: false # optional: enables LLM interviews/cover letters (offline fallback otherwise)
+      - key: ADMIN_PASSWORD
+        sync: false # optional: >=12 chars — seeds the admin account (never a default password)
       - key: FRONTEND_URL
         value: https://cvforge.onrender.com # update after first deploy if the URL differs

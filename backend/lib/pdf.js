@@ -1,26 +1,63 @@
-// PDF generation: Puppeteer (pretty HTML) when available, else pdfkit (Termux-safe)
+// ── PDF Generator ──────────────────────────────────────────────────────────
+// Generates a professional PDF from text content using a pure-JS approach.
+// Falls back gracefully if Puppeteer is unavailable.
+const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
+
 async function makePDF(title, text) {
-  // Try puppeteer first
-  try {
-    const puppeteer = require("puppeteer");
-    const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-    const page = await browser.newPage();
-    const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const body = esc(text).split("\n").map((l) => (l.trim() ? `<p>${l}</p>` : "<br>")).join("");
-    await page.setContent(`<html><body style="font-family:sans-serif;padding:32px"><h1>${esc(title)}</h1>${body}</body></html>`);
-    const buf = await page.pdf({ format: "A4", printBackground: true });
-    await browser.close();
-    return { buffer: buf, mime: "application/pdf", ext: ".pdf", engine: "puppeteer" };
-  } catch { /* fall through to pdfkit */ }
-  const PDFDocument = require("pdfkit");
-  const chunks = [];
-  const doc = new PDFDocument({ size: "A4", margin: 40 });
-  const done = new Promise((resolve) => { doc.on("data", (c) => chunks.push(c)); doc.on("end", resolve); });
-  doc.fontSize(18).text(title, { underline: true });
-  doc.moveDown();
-  doc.fontSize(10).text(text || "", { lineGap: 2 });
-  doc.end();
-  await done;
-  return { buffer: Buffer.concat(chunks), mime: "application/pdf", ext: ".pdf", engine: "pdfkit" };
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([595.28, 841.89]); // A4
+  const { width, height } = page.getSize();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const margin = 50;
+  let y = height - margin;
+  const lineHeight = 18;
+
+  // Title
+  page.drawText(title, {
+    x: margin,
+    y,
+    size: 22,
+    font: boldFont,
+    color: rgb(0.12, 0.23, 0.37), // navy
+  });
+  y -= lineHeight * 1.5;
+
+  // Horizontal rule
+  page.drawLine({
+    start: { x: margin, y },
+    end: { x: width - margin, y },
+    thickness: 1,
+    color: rgb(0.12, 0.23, 0.37),
+  });
+  y -= lineHeight;
+
+  // Body text
+  const lines = text.split("\n");
+  for (const line of lines) {
+    if (y < margin + 40) {
+      const newPage = pdfDoc.addPage([595.28, 841.89]);
+      const { height: h2 } = newPage.getSize();
+      y = h2 - margin;
+    }
+    const isHeading = line === line.toUpperCase() && line.length < 50 && line.length > 0;
+    page.drawText(line, {
+      x: margin,
+      y,
+      size: isHeading ? 12 : 10,
+      font: isHeading ? boldFont : font,
+      color: isHeading ? rgb(0.12, 0.23, 0.37) : rgb(0.2, 0.2, 0.2),
+    });
+    y -= lineHeight;
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  return {
+    buffer: Buffer.from(pdfBytes),
+    mime: "application/pdf",
+    engine: "pdf-lib",
+  };
 }
+
 module.exports = { makePDF };

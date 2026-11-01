@@ -1,0 +1,165 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CVForge API",
+    "version": "2.0.0",
+    "description": "Create. Analyze. Improve. — CV platform API. Every route except health/auth/captcha/demo/public-shares/docs requires a Bearer JWT. Input is validated with Zod; uploads are memory-only (max 5MB, PDF/DOCX/TXT/MD, magic-byte verified)."
+  },
+  "servers": [{ "url": "/", "description": "Same origin (Express serves the built React app)" }],
+  "tags": [
+    { "name": "Auth" },
+    { "name": "AI" },
+    { "name": "CVs" },
+    { "name": "Applications" },
+    { "name": "Exports" },
+    { "name": "Privacy" },
+    { "name": "System" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" },
+          "details": {
+            "type": "array",
+            "items": { "type": "object", "properties": { "path": { "type": "string" }, "message": { "type": "string" } } }
+          }
+        }
+      },
+      "Captcha": {
+        "type": "object",
+        "properties": { "question": { "type": "string", "example": "What is 4 + 7?" }, "token": { "type": "string" } }
+      },
+      "AuthToken": {
+        "type": "object",
+        "properties": { "token": { "type": "string" }, "username": { "type": "string" }, "name": { "type": "string" } }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["name", "password", "captcha_token", "captcha_answer"],
+        "properties": {
+          "name": { "type": "string", "description": "3-32 chars: letters, numbers, _ or -" },
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 8 },
+          "captcha_token": { "type": "string" },
+          "captcha_answer": { "type": "number" }
+        }
+      },
+      "ProfileFields": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "phone": { "type": "string" },
+          "location": { "type": "string" },
+          "linkedin": { "type": "string" },
+          "github": { "type": "string" },
+          "summary": { "type": "string" },
+          "skills": { "type": "string" },
+          "jd": { "type": "string" },
+          "education": { "type": "string" },
+          "experience": { "type": "string" },
+          "projects": { "type": "string" },
+          "certs": { "type": "string" },
+          "achievements": { "type": "string" },
+          "template": { "type": "string", "enum": ["modern", "minimal", "professional", "tech", "fresher", "classic", "neon", "brutal"] }
+        }
+      },
+      "Application": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "company": { "type": "string" },
+          "status": { "type": "string", "enum": ["wishlist", "applied", "screening", "interview", "offer", "rejected"] },
+          "notes": { "type": "string" },
+          "remindAt": { "type": "string", "nullable": true, "description": "YYYY-MM-DD or YYYY-MM-DDTHH:mm" }
+        }
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/api/health": {
+      "get": { "tags": ["System"], "security": [], "summary": "Health check", "responses": { "200": { "description": "ok" } } }
+    },
+    "/api/demo": {
+      "get": { "tags": ["AI"], "security": [], "summary": "Demo analysis with demo CV/JD", "responses": { "200": { "description": "Analysis result" } } }
+    },
+    "/api/captcha": {
+      "get": { "tags": ["Auth"], "security": [], "summary": "Issue a one-time math captcha", "responses": { "200": { "description": "Captcha", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Captcha" } } } } } }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "security": [],
+        "summary": "Register (captcha required)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterRequest" } } } },
+        "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthToken" } } } }, "400": { "description": "Validation/captcha error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }, "409": { "description": "Name/email exists" } }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "security": [],
+        "summary": "Login",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["name", "password"], "properties": { "name": { "type": "string" }, "password": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "Token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthToken" } } } }, "401": { "description": "Invalid credentials" } }
+      }
+    },
+    "/api/auth/me": {
+      "get": { "tags": ["Auth"], "summary": "Current token identity", "responses": { "200": { "description": "User" }, "401": { "description": "Unauthorized" } } }
+    },
+    "/api/analyze": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Analyze CV vs JD (JSON or multipart with cv_file/jd_file)",
+        "requestBody": { "content": { "multipart/form-data": { "schema": { "type": "object", "properties": { "cv_text": { "type": "string" }, "jd_text": { "type": "string" }, "jd_url": { "type": "string" }, "mode": { "type": "string", "enum": ["fresher", "default"] }, "cv_file": { "type": "string", "format": "binary" }, "jd_file": { "type": "string", "format": "binary" } } } }, "application/json": { "schema": { "type": "object", "properties": { "cv_text": { "type": "string" }, "jd_text": { "type": "string" }, "jd_url": { "type": "string" }, "mode": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "Analysis with scores, gaps, suggestions" }, "401": { "description": "Unauthorized" }, "413": { "description": "File too large" }, "415": { "description": "File type rejected" } }
+      }
+    },
+    "/api/quickfix": { "post": { "tags": ["AI"], "summary": "One-tap bullet fixes", "responses": { "200": { "description": "pairs[]" } } } },
+    "/api/build": { "post": { "tags": ["AI"], "summary": "Build CV text from profile", "responses": { "200": { "description": "cv_text + analysis" } } } },
+    "/api/jd-breakdown": { "post": { "tags": ["AI"], "summary": "Job requirements breakdown vs profile", "responses": { "200": { "description": "Requirements, matching, missing" } } } },
+    "/api/jd-cv": { "post": { "tags": ["AI"], "summary": "Generate a CV tailored to a JD", "responses": { "200": { "description": "Tailored cv_text + analysis" } } } },
+    "/api/enhance": { "post": { "tags": ["AI"], "summary": "Rewrite bullets STAR-style + inject honest keywords", "responses": { "200": { "description": "Enhanced bullets + predicted score" } } } },
+    "/api/cover-letter": { "post": { "tags": ["AI"], "summary": "Generate a tailored cover letter", "responses": { "200": { "description": "letter" } } } },
+    "/api/mock-interview": { "post": { "tags": ["AI"], "summary": "Generate mock interview questions", "responses": { "200": { "description": "questions[]" } } } },
+    "/api/match": { "post": { "tags": ["AI"], "summary": "Rank one CV against up to 10 JDs", "responses": { "200": { "description": "ranking[]" } } } },
+    "/api/grammar": { "post": { "tags": ["AI"], "summary": "Offline grammar/spelling screen", "responses": { "200": { "description": "issues[]" } } } },
+    "/api/practice": { "post": { "tags": ["AI"], "summary": "Interview practice questions", "responses": { "200": { "description": "questions[]" } } } },
+    "/api/practice/evaluate": { "post": { "tags": ["AI"], "summary": "STAR-score answers 0-10", "responses": { "200": { "description": "results, avg, level" } } } },
+    "/api/cvs": {
+      "get": { "tags": ["CVs"], "summary": "List my CVs", "responses": { "200": { "description": "items[]" } } },
+      "post": { "tags": ["CVs"], "summary": "Save a CV", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProfileFields" } } } }, "responses": { "201": { "description": "Saved" } } }
+    },
+    "/api/cvs/{id}": { "get": { "tags": ["CVs"], "summary": "Get my CV by id (404 if not mine)", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "CV" }, "404": { "description": "Not found / not yours" } } } },
+    "/api/cvs/{id}/share": {
+      "post": { "tags": ["CVs"], "summary": "Create share link", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "{token, url}" } } },
+      "delete": { "tags": ["CVs"], "summary": "Revoke share link", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "revoked" } } }
+    },
+    "/api/share/{token}": {
+      "get": { "tags": ["CVs"], "security": [], "summary": "Public read-only shared CV", "parameters": [{ "name": "token", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Public CV fields" }, "404": { "description": "Invalid or revoked" } } }
+    },
+    "/api/history": {
+      "get": { "tags": ["CVs"], "summary": "List my analyses", "responses": { "200": { "description": "items[]" } } },
+      "post": { "tags": ["CVs"], "summary": "Save an analysis", "responses": { "201": { "description": "id + analysis" } } }
+    },
+    "/api/applications": {
+      "get": { "tags": ["Applications"], "summary": "List my applications", "responses": { "200": { "description": "items[] + statuses" } } },
+      "post": { "tags": ["Applications"], "summary": "Create an application", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Application" } } } }, "responses": { "201": { "description": "Created" } } }
+    },
+    "/api/applications/{id}": {
+      "patch": { "tags": ["Applications"], "summary": "Update application", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Updated" }, "404": { "description": "Not found" } } },
+      "delete": { "tags": ["Applications"], "summary": "Delete application", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "deleted" } } }
+    },
+    "/api/pdf": { "post": { "tags": ["Exports"], "summary": "Generate PDF (puppeteer → pdfkit fallback)", "responses": { "200": { "description": "application/pdf" } } } },
+    "/api/docx": { "post": { "tags": ["Exports"], "summary": "Generate DOCX", "responses": { "200": { "description": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" } } } },
+    "/api/me/export": { "get": { "tags": ["Privacy"], "summary": "Export all my data as JSON", "responses": { "200": { "description": "Everything the account owns" } } } },
+    "/api/me": { "delete": { "tags": ["Privacy"], "summary": "Delete account + all data", "responses": { "200": { "description": "deleted" } } } },
+    "/api/architecture": { "get": { "tags": ["System"], "summary": "Architecture map (authenticated)", "responses": { "200": { "description": "layers[]" } } } }
+  }
+}

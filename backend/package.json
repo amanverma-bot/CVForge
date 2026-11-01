@@ -1,28 +1,40 @@
 {
-  "name": "cv-mern-backend",
-  "version": "1.0.0",
-  "type": "commonjs",
-  "description": "CV Analyzer + Creator API: Express + JWT + MongoDB-ready + LLM-ready + PDF",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
-  },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "docx": "^9.8.1",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2",
-    "mammoth": "^1.8.0",
-    "mongoose": "^8.4.0",
-    "multer": "^1.4.5-lts.1",
-    "openai": "^4.52.0",
-    "pdf-parse": "^1.1.1",
-    "pdfkit": "^0.15.0"
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "docx": "^9.15.1",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.2",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.13.0",
+    "mongoose": "^9.11.4",
+    "multer": "^2.5.0",
+    "node-fetch": "^2.7.0",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "pino-http": "^11.0.0",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.6.7"
   },
-  "optionalDependencies": {
-    "puppeteer": "^22.10.0"
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "supertest": "^7.3.1",
+    "vitest": "^5.0.5"
   }
 }

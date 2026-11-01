@@ -1,0 +1,31 @@
+{
+  "name": "cvforge",
+  "private": true,
+  "version": "2.0.0",
+  "description": "CVForge monorepo tooling — ESLint, Prettier, Husky, lint-staged",
+  "scripts": {
+    "prepare": "husky",
+    "lint": "eslint backend frontend/src frontend/vite.config.js frontend/tailwind.config.js",
+    "lint:fix": "eslint backend frontend/src --fix",
+    "format": "prettier --write \"backend/**/*.{js,json}\" \"frontend/src/**/*.{js,jsx,css}\" \"*.{json,md}\" \".github/**/*.yml\"",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "npm --prefix backend test",
+    "test:frontend": "npm --prefix frontend test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "globals": "^15.11.0",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.3"
+  },
+  "lint-staged": {
+    "*.{js,jsx,mjs,cjs,json,md,yml,yaml,css}": "prettier --write",
+    "backend/**/*.js": "eslint --fix",
+    "frontend/src/**/*.{js,jsx}": "eslint --fix"
+  }
+}
