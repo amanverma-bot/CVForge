@@ -36,7 +36,9 @@ function securityHeaders() {
 function buildCors() {
   return (req, res, next) => {
     const origin = req.headers.origin;
-    const isAllowed = !origin || ALLOWED_ORIGINS.has(origin) || origin === "null";
+    const host = req.headers.host;
+    const sameOrigin = origin && host && (origin === `http://${host}` || origin === `https://${host}`);
+    const isAllowed = !origin || ALLOWED_ORIGINS.has(origin) || origin === "null" || sameOrigin;
 
     if (!isAllowed) {
       return res.status(403).json({ error: "Origin not allowed" });
