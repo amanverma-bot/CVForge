@@ -21,7 +21,7 @@ async function connect(mongoUri) {
     return;
   }
   try {
-    const { MongoClient } = require("mongoose");
+    const mongoose = require("mongoose");
     await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 5000,
     });
