@@ -58,6 +58,12 @@ function errorHandler(err, req, res, next) {
     message = "Not found";
   }
 
+  // Never leak internal error details (driver/stack messages) in production.
+  if (isProd && statusCode >= 500 && !err.isOperational) {
+    message = "Internal server error";
+    details = undefined;
+  }
+
   res.status(statusCode).json({
     error: message,
     ...(details ? { details } : {}),

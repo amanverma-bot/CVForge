@@ -174,6 +174,8 @@ const createCV = z.object({
   generatedText: optional(20000),
 });
 
+const updateCV = createCV.partial();
+
 const createApplication = z.object({
   title: required(120),
   company: optional(120),
@@ -215,6 +217,7 @@ module.exports = {
   evaluate,
   pdf,
   createCV,
+  updateCV,
   createApplication,
   updateApplication,
   createHistory,

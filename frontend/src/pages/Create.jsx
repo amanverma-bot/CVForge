@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
+  User,
+  GraduationCap,
   Mail,
   Phone,
   MapPin,
@@ -24,6 +26,7 @@ import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useStore } from '@/store/useStore';
+import { api, apiBlob, downloadBlob, errorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const STEPS = [
@@ -71,6 +74,8 @@ export default function Create() {
   const [activeTemplate, setActiveTemplate] = useState(draft.template || 'modern');
   const [viewMode, setViewMode] = useState('edit'); // 'edit' | 'preview'
   const [toast, setToast] = useState(null);
+  const [savedId, setSavedId] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const currentStep = STEPS[stepIndex];
 
@@ -155,17 +160,102 @@ export default function Create() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const educationText = (d) =>
+    d.education
+      .map((e) => [e.degree, e.school, e.years, e.detail].filter(Boolean).join(' | '))
+      .filter(Boolean)
+      .join('\n');
+
+  const experienceText = (d) =>
+    d.experience
+      .map((e) => [e.role, e.org, e.dates, e.bullets].filter(Boolean).join(' | '))
+      .filter(Boolean)
+      .join('\n');
+
+  const projectsText = (d) =>
+    d.projects
+      .map((p) => [p.name, p.tech, p.desc].filter(Boolean).join(' | '))
+      .filter(Boolean)
+      .join('\n');
+
+  const certsText = (d) => d.certs.map((c) => c.name).filter(Boolean).join(', ');
+
+  const buildResumeText = (d) => {
+    const contact = [d.email, d.phone, d.location, d.linkedin, d.github].filter(Boolean).join(' | ');
+    return [
+      d.name,
+      contact,
+      '',
+      d.summary ? `SUMMARY\n${d.summary}\n` : '',
+      d.education.length ? `EDUCATION\n${educationText(d)}\n` : '',
+      d.experience.length ? `EXPERIENCE\n${experienceText(d)}\n` : '',
+      d.projects.length ? `PROJECTS\n${projectsText(d)}\n` : '',
+      d.skills ? `SKILLS\n${d.skills}\n` : '',
+      d.certs.length ? `CERTIFICATIONS\n${certsText(d)}\n` : '',
+      d.achievements?.length ? `ACHIEVEMENTS\n${d.achievements.join('\n')}\n` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+  };
+
+  const buildPayload = () => ({
+    name: draft.name.trim(),
+    email: draft.email.trim(),
+    phone: draft.phone.trim(),
+    location: draft.location.trim(),
+    linkedin: draft.linkedin.trim(),
+    github: draft.github.trim(),
+    summary: draft.summary.trim(),
+    education: educationText(draft),
+    experience: experienceText(draft),
+    projects: projectsText(draft),
+    skills: draft.skills.trim(),
+    template: draft.template || 'modern',
+    role: draft.experience[0]?.role?.trim() || '',
+    generatedText: buildResumeText(draft),
+  });
+
   const saveCV = async () => {
     if (!draft.name.trim()) {
       showToast('Please enter your name', 'error');
       return;
     }
-    showToast('CV saved successfully!');
+    setSaving(true);
+    try {
+      const payload = buildPayload();
+      const saved = savedId
+        ? await api(`/api/cvs/${savedId}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        : await api('/api/cvs', { method: 'POST', body: JSON.stringify(payload) });
+      setSavedId(saved.id || saved._id);
+      showToast(savedId ? 'CV updated successfully!' : 'CV saved successfully!');
+    } catch (err) {
+      showToast(errorMessage(err), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const exportPDF = () => {
-    showToast('PDF export initiated');
-    // PDF export would connect to backend /api/pdf
+  const exportPDF = async () => {
+    const text = buildResumeText(draft);
+    if (!text) {
+      showToast('Add some CV content before exporting', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      const blob = await apiBlob('/api/pdf', {
+        method: 'POST',
+        body: JSON.stringify({ title: draft.name || 'Resume', text }),
+      });
+      const slug = (draft.name || 'resume').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'resume';
+      downloadBlob(blob, `${slug}.pdf`);
+      showToast('PDF downloaded');
+    } catch (err) {
+      showToast(errorMessage(err), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const progress = Math.round(((stepIndex + 1) / STEPS.length) * 100);
@@ -179,13 +269,13 @@ export default function Create() {
           <p className="text-muted-foreground">Build your professional resume step by step</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportPDF} disabled={!draft.name}>
+          <Button variant="outline" size="sm" onClick={exportPDF} disabled={!draft.name || saving}>
             <Download className="w-4 h-4 mr-2" />
             Export PDF
           </Button>
-          <Button variant="primary" size="sm" onClick={saveCV} disabled={!draft.name}>
+          <Button variant="primary" size="sm" onClick={saveCV} disabled={!draft.name || saving}>
             <Save className="w-4 h-4 mr-2" />
-            Save CV
+            {saving ? 'Saving…' : savedId ? 'Update CV' : 'Save CV'}
           </Button>
         </div>
       </div>

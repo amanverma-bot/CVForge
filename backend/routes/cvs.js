@@ -61,6 +61,36 @@ router.get(
   })
 );
 
+const PROFILE_KEYS = ["name", "email", "phone", "location", "linkedin", "github", "summary"];
+const TEXT_KEYS = ["education", "experience", "skills", "projects", "role", "generatedText", "template"];
+
+router.patch(
+  "/cvs/:id",
+  requireAuth,
+  validate({ params: schemas.idParam, body: schemas.updateCV }),
+  asyncHandler(async (req, res) => {
+    const userId = String(req.user.id);
+    const existing = await store.getCV(req.params.id, userId);
+    if (!existing) throw new AppError(404, "CV not found");
+
+    const b = req.body;
+    const data = {};
+    const personal = { ...(existing.personalInfo || {}) };
+    let personalChanged = false;
+    for (const k of PROFILE_KEYS) {
+      if (b[k] !== undefined) {
+        personal[k] = b[k];
+        personalChanged = true;
+      }
+    }
+    if (personalChanged) data.personalInfo = personal;
+    for (const k of TEXT_KEYS) if (b[k] !== undefined) data[k] = b[k];
+
+    const updated = await store.updateCV(req.params.id, userId, data);
+    res.json(updated);
+  })
+);
+
 router.post(
   "/cvs/:id/share",
   requireAuth,

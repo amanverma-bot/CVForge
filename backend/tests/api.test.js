@@ -278,3 +278,62 @@ describe("Validation & upload hardening", () => {
     expect(fetched.body.admin).toBeUndefined();
   });
 });
+
+describe("Account lifecycle & CV updates", () => {
+  it("register/login responses include the user id used by the client", async () => {
+    const reg = await register(`u${uniq()}`);
+    expect(reg.status).toBe(201);
+    expect(reg.body.user.id).toBeTruthy();
+    expect(reg.body.user.name).toBe(reg.body.name);
+
+    const login = await api.post("/api/auth/login").send({ name: reg.body.name, password: "Passw0rd!123" });
+    expect(login.status).toBe(200);
+    expect(login.body.user.id).toBe(reg.body.user.id);
+  });
+
+  it("a token stops working after the account is deleted", async () => {
+    const reg = await register(`del${uniq()}`);
+    const token = reg.body.token;
+    expect((await api.get("/api/cvs").set("Authorization", `Bearer ${token}`)).status).toBe(200);
+    expect((await api.delete("/api/me").set("Authorization", `Bearer ${token}`)).status).toBe(200);
+    const after = await api.get("/api/cvs").set("Authorization", `Bearer ${token}`);
+    expect(after.status).toBe(401);
+  });
+
+  it("PATCH /api/cvs/:id updates owned fields and preserves others", async () => {
+    const reg = await register(`p${uniq()}`);
+    const token = reg.body.token;
+    const created = await api.post("/api/cvs").set("Authorization", `Bearer ${token}`).send({
+      name: "Old Name", email: "old@example.com", skills: "JS", template: "modern",
+    });
+    expect(created.status).toBe(201);
+    const patched = await api
+      .patch(`/api/cvs/${created.body.id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "New Name", skills: "JS, Python" });
+    expect(patched.status).toBe(200);
+    expect(patched.body.personalInfo.name).toBe("New Name");
+    expect(patched.body.personalInfo.email).toBe("old@example.com");
+    expect(patched.body.skills).toBe("JS, Python");
+
+    const other = await register(`q${uniq()}`);
+    const denied = await api.patch(`/api/cvs/${created.body.id}`).set("Authorization", `Bearer ${other.body.token}`).send({ name: "Hijack" });
+    expect(denied.status).toBe(404);
+  });
+});
+
+describe("SSRF guard on JD URL import", () => {
+  it.each([
+    "http://127.0.0.1/x",
+    "http://localhost:5001/",
+    "http://169.254.169.254/latest/meta-data/",
+    "http://10.0.0.5/",
+    "http://192.168.1.1/",
+    "http://[::1]/",
+    "file:///etc/passwd",
+    "ftp://example.com/x",
+  ])("blocks %s", async (url) => {
+    const { fetchJDFromURL } = await import("../services/parserService.js");
+    expect(await fetchJDFromURL(url, 2000)).toBe("");
+  });
+});

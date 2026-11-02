@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
+import { api, errorMessage } from '@/lib/api';
 
 export default function Login() {
   const [mode, setMode] = useState('login');
@@ -37,8 +38,7 @@ export default function Login() {
 
   const fetchCaptcha = async () => {
     try {
-      const res = await fetch('/api/captcha');
-      const data = await res.json();
+      const data = await api('/api/captcha', { skipAuth: true });
       setCaptcha(data);
       setForm((prev) => ({ ...prev, captchaToken: data.token, captchaAnswer: '' }));
     } catch {
@@ -69,17 +69,22 @@ export default function Login() {
       const body = mode === 'register'
         ? { name: form.name.trim(), email: form.email.trim(), password: form.password, captcha_token: form.captchaToken, captcha_answer: Number(form.captchaAnswer) }
         : { name: form.name.trim(), password: form.password };
-      const res = await fetch(`/api/auth/${mode}`, {
+      const data = await api(`/api/auth/${mode}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        skipAuth: true,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Request failed');
-      storeLogin(data.token, { id: data.id || '', name: data.name || data.username, email: form.email, role: 'free', createdAt: new Date().toISOString() });
+      const user = data.user || {};
+      storeLogin(data.token, {
+        id: user.id || '',
+        name: user.name || data.name || data.username || form.name.trim(),
+        email: user.email || form.email || undefined,
+        role: user.role || 'free',
+        createdAt: user.createdAt || new Date().toISOString(),
+      });
       navigate('/dashboard');
     } catch (err) {
-      setErrors({ submit: err.message || 'Something went wrong' });
+      setErrors({ submit: errorMessage(err) });
       if (mode === 'register') fetchCaptcha();
     } finally {
       setBusy(false);
@@ -105,6 +110,7 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex gap-2 mb-6">
               <button
+                type="button"
                 onClick={() => setMode('login')}
                 className={cn(
                   'flex-1 py-2.5 rounded-lg text-sm font-medium transition-all',
@@ -116,6 +122,7 @@ export default function Login() {
                 Login
               </button>
               <button
+                type="button"
                 onClick={() => setMode('register')}
                 className={cn(
                   'flex-1 py-2.5 rounded-lg text-sm font-medium transition-all',
@@ -163,6 +170,7 @@ export default function Login() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">{captcha.question}</span>
                     <button
+                      type="button"
                       onClick={fetchCaptcha}
                       className="text-xs text-primary underline"
                     >
@@ -215,6 +223,7 @@ export default function Login() {
                 : 'Already have an account?'
               }
               <button
+                type="button"
                 onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
                 className="text-primary font-semibold hover:text-primary-hover ml-1"
               >

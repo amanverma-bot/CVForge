@@ -32,7 +32,12 @@ router.post(
       throw e;
     }
     auditEvent("register", req, { name });
-    res.status(201).json({ token: signToken(user), username: name, name });
+    res.status(201).json({
+      token: signToken(user),
+      username: user.name,
+      name: user.name,
+      user: { id: user.id, name: user.name, username: user.name, email: user.email || null, role: user.role, createdAt: user.createdAt },
+    });
   })
 );
 
@@ -50,7 +55,12 @@ router.post(
       throw new AppError(401, "Invalid credentials");
     }
     auditEvent("login_success", req, { name: user.name || user.username });
-    res.json({ token: signToken(user), username: user.name || user.username, name: user.name || user.username });
+    res.json({
+      token: signToken(user),
+      username: user.name || user.username,
+      name: user.name || user.username,
+      user: { id: user.id, name: user.name, username: user.name, email: user.email || null, role: user.role, createdAt: user.createdAt },
+    });
   })
 );
 

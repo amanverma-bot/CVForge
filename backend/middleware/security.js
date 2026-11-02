@@ -84,17 +84,15 @@ function buildCors() {
 
 function httpsRedirect(req, res, next) {
   if (process.env.FORCE_HTTPS === "true" && req.header("x-forwarded-proto") !== "https") {
-    return res.redirect(301, `https://${req.header("host")}${req.url}`);
+    const code = req.method === "GET" || req.method === "HEAD" ? 301 : 308;
+    return res.redirect(code, `https://${req.header("host")}${req.url}`);
   }
   next();
 }
 
 function configureCors(env) {
   const frontend = env.FRONTEND_URL || "";
-  const additional = env.ALLOW_TUNNEL_ORIGINS === "true" ? [".trycloudflare.com"] : [];
-  [frontend, ...additional].forEach((o) => {
-    if (o) addOrigin(o.trim());
-  });
+  if (frontend) addOrigin(frontend.trim());
 }
 
 module.exports = { securityHeaders, buildCors, httpsRedirect, configureCors, addOrigin, ALLOWED_ORIGINS };

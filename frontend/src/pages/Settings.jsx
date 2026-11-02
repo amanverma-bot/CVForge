@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   User,
   Mail,
@@ -17,10 +17,12 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { useStore } from '@/store/useStore';
+import { api, errorMessage, downloadBlob } from '@/lib/api';
 
 export default function Settings() {
-  const [theme, setTheme] = useState('light');
   const { user, logout, theme: storeTheme, setTheme: setStoreTheme } = useStore();
+  const [theme, setTheme] = useState(storeTheme);
+  const [busyAction, setBusyAction] = useState('');
   const navigate = useNavigate();
 
   const handleThemeChange = (val) => {
@@ -32,6 +34,35 @@ export default function Settings() {
     if (confirm('Are you sure you want to sign out?')) {
       logout();
       navigate('/login');
+    }
+  };
+
+  const handleExportData = async () => {
+    setBusyAction('export');
+    try {
+      const data = await api('/api/me/export');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      downloadBlob(blob, `cvforge-data-${new Date().toISOString().slice(0, 10)}.json`);
+    } catch (err) {
+      alert(errorMessage(err));
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm('Delete your account and all CVs, analyses and applications? This cannot be undone.')) return;
+    const typed = prompt('Type DELETE to confirm permanent deletion');
+    if (typed !== 'DELETE') return;
+    setBusyAction('delete');
+    try {
+      await api('/api/me', { method: 'DELETE' });
+      logout();
+      navigate('/login');
+    } catch (err) {
+      alert(errorMessage(err));
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -62,17 +93,21 @@ export default function Settings() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <InputLabel>Display Name</InputLabel>
-          <input className="input w-full" defaultValue={user?.name} />
+          <input className="input w-full" value={user?.name || ''} readOnly />
           <InputLabel>Email Address</InputLabel>
-          <input className="input w-full" defaultValue={user?.email} type="email" />
+          <input className="input w-full" value={user?.email || 'Not provided'} type="email" readOnly />
         </div>
-        <Button variant="outline" size="sm" className="w-full">
+        <Button variant="outline" size="sm" className="w-full" onClick={handleExportData} disabled={busyAction === 'export'}>
           <Download className="w-4 h-4 mr-2" />
-          Export My Data (JSON)
+          {busyAction === 'export' ? 'Exporting…' : 'Export My Data (JSON)'}
         </Button>
         <Button variant="destructive" size="sm" className="w-full" onClick={handleLogout}>
           <LogOut className="w-4 h-4 mr-2" />
           Sign Out
+        </Button>
+        <Button variant="destructive" size="sm" className="w-full" onClick={handleDeleteAccount} disabled={busyAction === 'delete'}>
+          <Trash2 className="w-4 h-4 mr-2" />
+          {busyAction === 'delete' ? 'Deleting…' : 'Delete Account & All Data'}
         </Button>
       </Card>
 
@@ -144,21 +179,21 @@ export default function Settings() {
               <h3 className="text-sm font-semibold text-foreground">Change Password</h3>
               <p className="text-xs text-muted-foreground">Update your account password</p>
             </div>
-            <Button variant="outline" size="sm">Change</Button>
+            <Button variant="outline" size="sm" disabled title="Not available in this version">Change</Button>
           </div>
           <div className="flex items-center justify-between p-3 rounded-lg border border-border">
             <div>
               <h3 className="text-sm font-semibold text-foreground">Two-Factor Authentication</h3>
               <p className="text-xs text-muted-foreground">Add extra security to your account</p>
             </div>
-            <Button variant="outline" size="sm">Enable</Button>
+            <Button variant="outline" size="sm" disabled title="Not available in this version">Enable</Button>
           </div>
           <div className="flex items-center justify-between p-3 rounded-lg border border-border">
             <div>
               <h3 className="text-sm font-semibold text-foreground">Active Sessions</h3>
               <p className="text-xs text-muted-foreground">Manage devices logged into your account</p>
             </div>
-            <Button variant="outline" size="sm">Manage</Button>
+            <Button variant="outline" size="sm" disabled title="Sessions use stateless JWT and expire after 7 days">Manage</Button>
           </div>
         </div>
       </Card>
@@ -178,10 +213,10 @@ export default function Settings() {
             <Badge variant="primary" className="text-xs">Active</Badge>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Button variant="outline" size="sm" className="w-full">
+            <Button variant="outline" size="sm" className="w-full" disabled title="Not available in this version">
               Upgrade to Pro
             </Button>
-            <Button variant="outline" size="sm" className="w-full">
+            <Button variant="outline" size="sm" className="w-full" disabled title="Not available in this version">
               View Invoices
             </Button>
           </div>

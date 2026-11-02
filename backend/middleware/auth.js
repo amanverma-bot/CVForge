@@ -2,6 +2,7 @@
 // JWT verification with bcrypt password hashing support.
 const jwt = require("jsonwebtoken");
 const env = require("../config/env");
+const store = require("../models/store");
 
 const JWT_SECRET = env.JWT_SECRET;
 const JWT_EXPIRY = "7d";
@@ -19,7 +20,7 @@ function verifyToken(token) {
   return jwt.verify(token, JWT_SECRET, { issuer: ISSUER });
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     const err = new Error("Authentication required");
@@ -28,20 +29,35 @@ function requireAuth(req, res, next) {
   }
 
   const token = authHeader.slice(7);
+  let decoded;
   try {
-    const decoded = verifyToken(token);
-    req.user = {
-      id: decoded.sub || decoded.id,
-      name: decoded.name,
-      email: decoded.email,
-      role: decoded.role || "free",
-    };
-    next();
-  } catch (err) {
+    decoded = verifyToken(token);
+  } catch {
     const authErr = new Error("Invalid or expired token");
     authErr.statusCode = 401;
-    next(authErr);
+    return next(authErr);
   }
+
+  let user;
+  try {
+    user = await store.getUserById(decoded.sub || decoded.id);
+  } catch (err) {
+    return next(err);
+  }
+  if (!user) {
+    const err = new Error("Account no longer exists");
+    err.statusCode = 401;
+    return next(err);
+  }
+
+  req.user = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role || "free",
+    createdAt: user.createdAt,
+  };
+  next();
 }
 
 function optionalAuth(req, res, next) {

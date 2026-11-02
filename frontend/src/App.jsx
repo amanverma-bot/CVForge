@@ -13,6 +13,7 @@ import { useStore } from '@/store/useStore';
 import { initializeTheme } from '@/store/useStore';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
 
 // Pages (lazy-loaded with Suspense boundaries)
 const Landing = React.lazy(() => import('./pages/Landing'));
@@ -48,11 +49,25 @@ function LoadingFallback() {
 }
 
 function App() {
-  const { theme, setTheme, isAuthenticated } = useStore();
+  const { theme, isAuthenticated, token, setUser } = useStore();
 
   useEffect(() => {
     initializeTheme();
   }, []);
+
+  // Validate the persisted session once on boot; api() clears auth on 401.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    api('/api/auth/me')
+      .then((data) => {
+        if (!cancelled && data?.user) setUser(data.user);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [token, setUser]);
 
   return (
     <BrowserRouter>
@@ -62,7 +77,6 @@ function App() {
           richColors
           closeButton
           cancelButton
-          className="cn"
         />
         <Navbar />
         <Suspense fallback={<LoadingFallback />}>

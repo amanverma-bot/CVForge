@@ -126,7 +126,7 @@ async function createUser({ name, email, passwordHash }) {
     if (existing) throw Object.assign(new Error("Name/email already exists"), { code: 11000 });
     const user = new User({ name, email, passwordHash });
     await user.save();
-    return { id: user._id.toString(), name, email, role: "free" };
+    return { id: user._id.toString(), name, email, role: "free", createdAt: user.createdAt };
   }
   // In-memory
   const existing = memoryStore.users.find(
@@ -136,14 +136,14 @@ async function createUser({ name, email, passwordHash }) {
   const id = Math.random().toString(36).slice(2, 11);
   const user = { id, name, email, passwordHash, role: "free", createdAt: new Date().toISOString() };
   memoryStore.users.push(user);
-  return { id, name, email, role: "free" };
+  return { id, name, email, role: "free", createdAt: user.createdAt };
 }
 
 async function findUser(name) {
   if (isMongo) {
     const user = await User.findOne({ name });
     if (!user) return null;
-    return { id: user._id.toString(), name: user.name, email: user.email, passwordHash: user.passwordHash, role: user.role };
+    return { id: user._id.toString(), name: user.name, email: user.email, passwordHash: user.passwordHash, role: user.role, createdAt: user.createdAt };
   }
   return memoryStore.users.find((u) => u.name === name) || null;
 }
@@ -153,7 +153,7 @@ async function getUserById(id) {
     if (!oid(id)) return null;
     const user = await User.findById(id);
     if (!user) return null;
-    return { id: user._id.toString(), name: user.name, email: user.email, role: user.role };
+    return { id: user._id.toString(), name: user.name, email: user.email, role: user.role, createdAt: user.createdAt };
   }
   return memoryStore.users.find((u) => u.id === id) || null;
 }
@@ -184,6 +184,22 @@ async function getCV(id, userId) {
     return withId(await CV.findOne({ _id: id, userId }).lean());
   }
   return memoryStore.cvs.find((c) => c.id === id && c.userId === userId) || null;
+}
+
+async function updateCV(id, userId, data) {
+  if (isMongo) {
+    if (!oid(id)) return null;
+    const cv = await CV.findOneAndUpdate(
+      { _id: id, userId },
+      { $set: { ...data, updatedAt: new Date() } },
+      { new: true, runValidators: true }
+    ).lean();
+    return withId(cv);
+  }
+  const cv = memoryStore.cvs.find((c) => c.id === id && c.userId === userId);
+  if (!cv) return null;
+  Object.assign(cv, data, { updatedAt: new Date().toISOString() });
+  return cv;
 }
 
 async function shareCV(id, userId) {
@@ -341,6 +357,7 @@ module.exports = {
   createCV,
   listCVs,
   getCV,
+  updateCV,
   shareCV,
   revokeShare,
   getShared,
