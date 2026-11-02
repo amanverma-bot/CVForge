@@ -14,7 +14,12 @@ function configure(key, mdl, base) {
 }
 
 function hasKey() {
-  return Boolean(apiKey && apiKey.trim());
+  const key = (apiKey || "").trim();
+  if (!key) return false;
+  // Reject .env placeholders such as sk-<your-openai-api-key> so health checks stay truthful.
+  if (key.includes("<") || key.includes(">")) return false;
+  if (/^your[-_ ]?/i.test(key)) return false;
+  return true;
 }
 
 async function chat(messages, options = {}) {

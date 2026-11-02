@@ -33,12 +33,33 @@ function securityHeaders() {
   });
 }
 
+// Public tunnel providers used for demos (dynamic subdomains can't be allow-listed).
+const TUNNEL_SUFFIXES = ["ngrok-free.dev", "ngrok-free.app", "ngrok.app", "ngrok.io", "trycloudflare.com"];
+
+function isTunnelOrigin(origin) {
+  if (!origin) return false;
+  try {
+    const u = new URL(origin);
+    if (u.protocol !== "https:") return false;
+    return TUNNEL_SUFFIXES.some((s) => u.hostname === s || u.hostname.endsWith(`.${s}`));
+  } catch {
+    return false;
+  }
+}
+
 function buildCors() {
   return (req, res, next) => {
     const origin = req.headers.origin;
     const host = req.headers.host;
-    const sameOrigin = origin && host && (origin === `http://${host}` || origin === `https://${host}`);
-    const isAllowed = !origin || ALLOWED_ORIGINS.has(origin) || origin === "null" || sameOrigin;
+    const forwardedHost = String(req.headers["x-forwarded-host"] || "")
+      .split(",")[0]
+      .trim();
+    const sameOrigin =
+      origin &&
+      ((host && (origin === `http://${host}` || origin === `https://${host}`)) ||
+        (forwardedHost && (origin === `http://${forwardedHost}` || origin === `https://${forwardedHost}`)));
+    const tunnelAllowed = process.env.ALLOW_TUNNEL_ORIGINS === "true" && isTunnelOrigin(origin);
+    const isAllowed = !origin || ALLOWED_ORIGINS.has(origin) || origin === "null" || sameOrigin || tunnelAllowed;
 
     if (!isAllowed) {
       return res.status(403).json({ error: "Origin not allowed" });

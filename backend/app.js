@@ -6,12 +6,15 @@ const fs = require("fs");
 const pinoHttp = require("pino-http");
 const env = require("./config/env");
 const { logger } = require("./lib/logger");
-const { securityHeaders, buildCors, httpsRedirect } = require("./middleware/security");
+const { securityHeaders, buildCors, httpsRedirect, configureCors } = require("./middleware/security");
 const { globalLimiter } = require("./middleware/rateLimit");
 const { notFoundHandler, errorHandler } = require("./middleware/error");
 const { serveApiDocs } = require("./docs");
 
 const app = express();
+
+// Populate the CORS allow-list from the environment (FRONTEND_URL + tunnel opt-in).
+configureCors(env);
 
 app.disable("x-powered-by");
 app.set("trust proxy", env.TRUST_PROXY);

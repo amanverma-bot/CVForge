@@ -2,9 +2,92 @@
 // MongoDB-backed store with in-memory fallback for demo/development.
 // All queries are scoped by userId — no IDOR possible.
 
+const crypto = require("crypto");
+const mongoose = require("mongoose");
+
 let isMongo = false;
 let db = null;
 let client = null;
+
+// ── Mongoose models (defined once per process) ──
+const { Schema } = mongoose;
+
+const userSchema = new Schema(
+  {
+    name: { type: String, required: true, unique: true, index: true },
+    email: { type: String, unique: true, sparse: true },
+    passwordHash: { type: String, required: true },
+    role: { type: String, default: "free" },
+  },
+  { timestamps: true }
+);
+
+const cvSchema = new Schema(
+  {
+    userId: { type: String, required: true, index: true },
+    personalInfo: { type: Schema.Types.Mixed, default: {} },
+    education: String,
+    experience: String,
+    skills: String,
+    projects: String,
+    template: { type: String, default: "modern" },
+    role: String,
+    generatedText: String,
+    shareToken: { type: String, index: true, sparse: true },
+    sharedAt: Date,
+  },
+  { timestamps: true, strict: false }
+);
+
+const analysisSchema = new Schema(
+  {
+    userId: { type: String, required: true, index: true },
+    cvId: { type: String, default: null },
+    scoreData: Schema.Types.Mixed,
+    missingKeywords: [String],
+    suggestions: [String],
+    overall: Number,
+    verdict: String,
+    cvText: String,
+    jdText: String,
+    resultJson: String,
+  },
+  { timestamps: true }
+);
+
+const applicationSchema = new Schema(
+  {
+    userId: { type: String, required: true, index: true },
+    title: String,
+    company: String,
+    status: {
+      type: String,
+      enum: ["wishlist", "applied", "screening", "interview", "offer", "rejected"],
+      default: "wishlist",
+    },
+    notes: String,
+    remindAt: String,
+  },
+  { timestamps: true, strict: false }
+);
+
+const User = mongoose.models.User || mongoose.model("User", userSchema);
+const CV = mongoose.models.CV || mongoose.model("CV", cvSchema);
+const Analysis = mongoose.models.Analysis || mongoose.model("Analysis", analysisSchema);
+const Application = mongoose.models.Application || mongoose.model("Application", applicationSchema);
+
+// ObjectId guard: route ids are generic strings, so invalid values must 404, not throw CastError.
+const oid = (id) => (mongoose.isValidObjectId(id) ? id : null);
+
+// Normalize Mongo documents so routes always get both `id` and `_id`.
+const withId = (doc) => {
+  if (!doc) return doc;
+  const o = doc.toObject ? doc.toObject() : doc;
+  if (o._id && !o.id) o.id = o._id.toString();
+  return o;
+};
+
+const newShareToken = () => crypto.randomBytes(8).toString("hex");
 
 // In-memory fallback
 const memoryStore = {
@@ -21,7 +104,6 @@ async function connect(mongoUri) {
     return;
   }
   try {
-    const mongoose = require("mongoose");
     await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 5000,
     });
@@ -40,7 +122,6 @@ function isMongoConnected() {
 // ── User operations ──
 async function createUser({ name, email, passwordHash }) {
   if (isMongo) {
-    const User = mongoose.model("User");
     const existing = await User.findOne({ $or: [{ name }, ...(email ? [{ email }] : [])] });
     if (existing) throw Object.assign(new Error("Name/email already exists"), { code: 11000 });
     const user = new User({ name, email, passwordHash });
@@ -60,7 +141,6 @@ async function createUser({ name, email, passwordHash }) {
 
 async function findUser(name) {
   if (isMongo) {
-    const User = mongoose.model("User");
     const user = await User.findOne({ name });
     if (!user) return null;
     return { id: user._id.toString(), name: user.name, email: user.email, passwordHash: user.passwordHash, role: user.role };
@@ -70,7 +150,7 @@ async function findUser(name) {
 
 async function getUserById(id) {
   if (isMongo) {
-    const User = mongoose.model("User");
+    if (!oid(id)) return null;
     const user = await User.findById(id);
     if (!user) return null;
     return { id: user._id.toString(), name: user.name, email: user.email, role: user.role };
@@ -81,10 +161,9 @@ async function getUserById(id) {
 // ── CV operations ──
 async function createCV({ userId, ...data }) {
   if (isMongo) {
-    const CV = mongoose.model("CV");
     const cv = new CV({ userId, ...data });
     await cv.save();
-    return cv.toObject ? cv.toObject() : cv;
+    return withId(cv);
   }
   const id = Math.random().toString(36).slice(2, 11);
   const cv = { id, userId, ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -94,26 +173,25 @@ async function createCV({ userId, ...data }) {
 
 async function listCVs(userId) {
   if (isMongo) {
-    const CV = mongoose.model("CV");
-    return CV.find({ userId }).sort({ createdAt: -1 }).lean();
+    return (await CV.find({ userId }).sort({ createdAt: -1 }).lean()).map(withId);
   }
   return memoryStore.cvs.filter((c) => c.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
 async function getCV(id, userId) {
   if (isMongo) {
-    const CV = mongoose.model("CV");
-    return CV.findOne({ _id: id, userId }).lean();
+    if (!oid(id)) return null;
+    return withId(await CV.findOne({ _id: id, userId }).lean());
   }
   return memoryStore.cvs.find((c) => c.id === id && c.userId === userId) || null;
 }
 
 async function shareCV(id, userId) {
   if (isMongo) {
-    const CV = mongoose.model("CV");
+    if (!oid(id)) return null;
     const cv = await CV.findOne({ _id: id, userId });
     if (!cv) return null;
-    const token = Math.random().toString(36).slice(2, 14);
+    const token = newShareToken();
     cv.shareToken = token;
     cv.sharedAt = new Date();
     await cv.save();
@@ -121,7 +199,7 @@ async function shareCV(id, userId) {
   }
   const cv = memoryStore.cvs.find((c) => c.id === id && c.userId === userId);
   if (!cv) return null;
-  const token = Math.random().toString(36).slice(2, 14);
+  const token = newShareToken();
   cv.shareToken = token;
   cv.sharedAt = new Date().toISOString();
   return { token, url: `/s/${token}` };
@@ -129,7 +207,7 @@ async function shareCV(id, userId) {
 
 async function revokeShare(id, userId) {
   if (isMongo) {
-    const CV = mongoose.model("CV");
+    if (!oid(id)) return false;
     const cv = await CV.findOneAndUpdate({ _id: id, userId }, { $unset: { shareToken: 1, sharedAt: 1 } });
     return !!cv;
   }
@@ -142,8 +220,7 @@ async function revokeShare(id, userId) {
 
 async function getShared(token) {
   if (isMongo) {
-    const CV = mongoose.model("CV");
-    return CV.findOne({ shareToken: token }).lean();
+    return withId(await CV.findOne({ shareToken: token }).lean());
   }
   return memoryStore.cvs.find((c) => c.shareToken === token) || null;
 }
@@ -151,10 +228,9 @@ async function getShared(token) {
 // ── Analysis operations ──
 async function saveAnalysis({ userId, cvId, scoreData, missingKeywords, suggestions, overall, verdict, cvText, jdText, resultJson }) {
   if (isMongo) {
-    const Analysis = mongoose.model("Analysis");
     const analysis = new Analysis({ userId, cvId, scoreData, missingKeywords, suggestions, overall, verdict, cvText, jdText, resultJson });
     await analysis.save();
-    return analysis.toObject ? analysis.toObject() : analysis;
+    return withId(analysis);
   }
   const id = Math.random().toString(36).slice(2, 11);
   const analysis = { id, userId, cvId, scoreData, missingKeywords, suggestions, overall, verdict, cvText, jdText, resultJson, createdAt: new Date().toISOString() };
@@ -164,8 +240,7 @@ async function saveAnalysis({ userId, cvId, scoreData, missingKeywords, suggesti
 
 async function listAnalyses(userId) {
   if (isMongo) {
-    const Analysis = mongoose.model("Analysis");
-    return Analysis.find({ userId }).sort({ createdAt: -1 }).lean();
+    return (await Analysis.find({ userId }).sort({ createdAt: -1 }).lean()).map(withId);
   }
   return memoryStore.analyses.filter((a) => a.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
@@ -175,10 +250,9 @@ const STATUSES = ["wishlist", "applied", "screening", "interview", "offer", "rej
 
 async function createApplication({ userId, ...data }) {
   if (isMongo) {
-    const Application = mongoose.model("Application");
     const app = new Application({ userId, ...data });
     await app.save();
-    return app.toObject ? app.toObject() : app;
+    return withId(app);
   }
   const id = Math.random().toString(36).slice(2, 11);
   const app = { id, userId, ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -188,17 +262,15 @@ async function createApplication({ userId, ...data }) {
 
 async function listApplications(userId) {
   if (isMongo) {
-    const Application = mongoose.model("Application");
-    return Application.find({ userId }).sort({ createdAt: -1 }).lean();
+    return (await Application.find({ userId }).sort({ createdAt: -1 }).lean()).map(withId);
   }
   return memoryStore.applications.filter((a) => a.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
 async function updateApplication(id, userId, data) {
   if (isMongo) {
-    const Application = mongoose.model("Application");
-    const app = await Application.findOneAndUpdate({ _id: id, userId }, { $set: { ...data, updatedAt: new Date() } }, { new: true }).lean();
-    return app;
+    if (!oid(id)) return null;
+    return withId(await Application.findOneAndUpdate({ _id: id, userId }, { $set: { ...data, updatedAt: new Date() } }, { new: true }).lean());
   }
   const app = memoryStore.applications.find((a) => a.id === id && a.userId === userId);
   if (!app) return null;
@@ -208,7 +280,7 @@ async function updateApplication(id, userId, data) {
 
 async function deleteApplication(id, userId) {
   if (isMongo) {
-    const Application = mongoose.model("Application");
+    if (!oid(id)) return false;
     const res = await Application.deleteOne({ _id: id, userId });
     return res.deletedCount > 0;
   }
@@ -221,20 +293,21 @@ async function deleteApplication(id, userId) {
 // ── Privacy operations ──
 async function exportUserData(userId) {
   if (isMongo) {
-    const User = mongoose.model("User");
-    const CV = mongoose.model("CV");
-    const Analysis = mongoose.model("Analysis");
-    const Application = mongoose.model("Application");
+    if (!oid(userId)) return { user: null, cvs: [], analyses: [], applications: [] };
     const [user, cvs, analyses, apps] = await Promise.all([
       User.findById(userId).lean(),
       CV.find({ userId }).lean(),
       Analysis.find({ userId }).lean(),
       Application.find({ userId }).lean(),
     ]);
-    return { user, cvs, analyses, applications: apps };
+    if (user) delete user.passwordHash;
+    return { user, cvs: cvs.map(withId), analyses: analyses.map(withId), applications: apps.map(withId) };
   }
+  const found = memoryStore.users.find((u) => u.id === userId);
+  const user = found ? { ...found } : null;
+  if (user) delete user.passwordHash;
   return {
-    user: memoryStore.users.find((u) => u.id === userId),
+    user,
     cvs: memoryStore.cvs.filter((c) => c.userId === userId),
     analyses: memoryStore.analyses.filter((a) => a.userId === userId),
     applications: memoryStore.applications.filter((a) => a.userId === userId),
@@ -243,10 +316,7 @@ async function exportUserData(userId) {
 
 async function deleteAccount(userId) {
   if (isMongo) {
-    const User = mongoose.model("User");
-    const CV = mongoose.model("CV");
-    const Analysis = mongoose.model("Analysis");
-    const Application = mongoose.model("Application");
+    if (!oid(userId)) return false;
     await Promise.all([
       User.deleteOne({ _id: userId }),
       CV.deleteMany({ userId }),

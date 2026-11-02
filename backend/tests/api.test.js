@@ -58,6 +58,20 @@ describe("System & headers", () => {
     expect(res.status).toBe(403);
     expect(res.body.error).toBe("Origin not allowed");
   });
+
+  it("allows ngrok tunnel origins only when ALLOW_TUNNEL_ORIGINS=true", async () => {
+    const origin = "https://demo-test.ngrok-free.dev";
+    process.env.ALLOW_TUNNEL_ORIGINS = "true";
+    try {
+      const res = await api.get("/api/health").set("Origin", origin);
+      expect(res.status).toBe(200);
+      expect(res.headers["access-control-allow-origin"]).toBe(origin);
+    } finally {
+      delete process.env.ALLOW_TUNNEL_ORIGINS;
+    }
+    const blocked = await api.get("/api/health").set("Origin", origin);
+    expect(blocked.status).toBe(403);
+  });
 });
 
 describe("Auth: captcha, register, login", () => {
