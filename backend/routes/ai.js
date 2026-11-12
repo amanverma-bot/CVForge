@@ -41,6 +41,23 @@ router.post(
   })
 );
 
+router.post(
+  "/jd-import",
+  requireAuth,
+  aiLimiter,
+  validate({ body: schemas.jdImport }),
+  asyncHandler(async (req, res) => {
+    const text = await parser.fetchJDFromURL(req.body.url);
+    if (!text || !text.trim()) {
+      throw new AppError(
+        422,
+        "Could not import a readable job description from that URL. The site may block automated requests, require login, or the URL may be invalid."
+      );
+    }
+    res.json({ text: text.trim(), length: text.trim().length });
+  })
+);
+
 router.post("/quickfix", requireAuth, aiLimiter, validate({ body: schemas.quickfix }), (req, res) => {
   const { cv_text } = req.body;
   res.json({ pairs: scoring.quickFixes(cv_text) });
@@ -155,12 +172,17 @@ router.post(
   requireAuth,
   aiLimiter,
   validate({ body: schemas.evaluate }),
-  (req, res) => {
+  asyncHandler(async (req, res) => {
     const { questions, answers } = req.body;
-    const results = questions.map((q, i) => ({ q: typeof q === "string" ? q : q.q, ev: ai.evaluateAnswer(q, answers[i] || "") }));
+    const results = await Promise.all(
+      questions.map(async (q, i) => ({
+        q: typeof q === "string" ? q : q.q,
+        ev: await ai.evaluateAnswer(q, answers[i] || ""),
+      }))
+    );
     const avg = Math.round((results.reduce((a, r) => a + r.ev.score, 0) / Math.max(results.length, 1)) * 10) / 10;
     res.json({ results, avg, level: avg >= 8 ? "Interview Ready 🌟" : avg >= 6 ? "Good — Polish Needed" : "Needs Practice" });
-  }
+  })
 );
 
 module.exports = router;

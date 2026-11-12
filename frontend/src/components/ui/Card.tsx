@@ -10,16 +10,17 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ className, interactive = false, padding = 'md', children, ...props }, ref) => {
     const paddingClasses: Record<string, string> = {
       none: '',
-      sm: 'p-3',
-      md: 'p-5',
+      sm: 'p-4',
+      md: 'p-6',
       lg: 'p-8',
     };
     return (
       <div
         ref={ref}
         className={cn(
-          'card',
-          interactive && 'card-interactive',
+          'bg-card border border-border rounded-xl shadow-sm transition-all duration-200',
+          interactive &&
+            'hover:shadow-md hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
           paddingClasses[padding],
           className
         )}
@@ -36,7 +37,7 @@ Card.displayName = 'Card';
 export interface CardHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
 export const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
   ({ className, children, ...props }, ref) => (
-    <div ref={ref} className={cn('flex flex-col space-y-1.5 mb-4', className)} {...props}>
+    <div ref={ref} className={cn('flex flex-col space-y-1.5 mb-6', className)} {...props}>
       {children}
     </div>
   )
@@ -48,7 +49,7 @@ export const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
   ({ className, children, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('text-xl font-semibold text-foreground tracking-tight', className)}
+      className={cn('text-lg font-semibold text-foreground tracking-tight', className)}
       {...props}
     >
       {children}
@@ -74,7 +75,7 @@ CardDescription.displayName = 'CardDescription';
 export interface CardContentProps extends React.HTMLAttributes<HTMLDivElement> {}
 export const CardContent = React.forwardRef<HTMLDivElement, CardContentProps>(
   ({ className, children, ...props }, ref) => (
-    <div ref={ref} className={cn('mt-2', className)} {...props}>
+    <div ref={ref} className={cn('mt-4', className)} {...props}>
       {children}
     </div>
   )
@@ -86,7 +87,7 @@ export const CardFooter = React.forwardRef<HTMLDivElement, CardFooterProps>(
   ({ className, children, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('mt-4 flex items-center pt-4 border-t border-border', className)}
+      className={cn('mt-6 flex items-center pt-4 border-t border-border', className)}
       {...props}
     >
       {children}

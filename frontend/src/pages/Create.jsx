@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   FileText,
   User,
@@ -22,12 +21,10 @@ import {
   Plus,
   Trash2,
   Edit,
-  ArrowUpRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { useStore } from '@/store/useStore';
 import { api, apiBlob, downloadBlob, errorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -69,28 +66,93 @@ const initialDraft = {
   achievements: [],
 };
 
+const buildEntryList = (items, defaults) =>
+  (Array.isArray(items) ? items : []).map((item, index) => ({
+    ...defaults,
+    ...(item && typeof item === 'object' ? item : {}),
+    id: item?.id ?? `restored-${index}-${Date.now()}`,
+  }));
+
+// Persisted drafts can be partial (or come from an older data shape). Normalizing
+// here keeps every input controlled and makes the live preview safe to render.
+const normalizeDraft = (data) => {
+  const source = data && typeof data === 'object' ? data : {};
+  const template = TEMPLATES.some((item) => item.key === source.template)
+    ? source.template
+    : 'modern';
+
+  return {
+    ...initialDraft,
+    ...source,
+    name: source.name ?? '',
+    email: source.email ?? '',
+    phone: source.phone ?? '',
+    location: source.location ?? '',
+    linkedin: source.linkedin ?? '',
+    github: source.github ?? '',
+    summary: source.summary ?? '',
+    skills: Array.isArray(source.skills) ? source.skills.join(', ') : source.skills ?? '',
+    template,
+    education: buildEntryList(source.education, {
+      school: '',
+      degree: '',
+      years: '',
+      detail: '',
+    }),
+    experience: buildEntryList(source.experience, {
+      role: '',
+      org: '',
+      dates: '',
+      bullets: '',
+    }),
+    projects: buildEntryList(source.projects, { name: '', tech: '', desc: '' }),
+    certs: buildEntryList(source.certs, { name: '' }),
+    achievements: Array.isArray(source.achievements) ? source.achievements : [],
+  };
+};
+
+const logRequestFailure = (action, error) => {
+  const status = error?.status;
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
+  const protocol = typeof window !== 'undefined' ? window.location.protocol : 'unknown';
+
+  console.error(`[Create] ${action} failed`, error);
+  console.error('[Create] Request diagnostics', {
+    status,
+    message: error?.message,
+    origin,
+    protocol,
+  });
+
+  if (status === 401 || status === 403) {
+    console.error(
+      `[Create] ${status} received. Check Google Cloud API key restrictions, OAuth authorized origins, Firebase authorized domains, backend CORS, and the signed-in user's permissions for ${origin}.`
+    );
+  }
+
+  if (protocol === 'https:') {
+    console.error(
+      '[Create] Mixed-content hint: this page is served over HTTPS. Browser requests to HTTP endpoints are blocked; make sure every API URL also uses HTTPS.'
+    );
+  }
+};
+
 export default function Create() {
-  const navigate = useNavigate();
   const { setCVData, cvData } = useStore();
   const [stepIndex, setStepIndex] = useState(0);
-  const [draft, setDraft] = useState(cvData || initialDraft);
-  const [activeTemplate, setActiveTemplate] = useState(draft.template || 'modern');
+  const [draft, setDraft] = useState(() => normalizeDraft(cvData));
   const [viewMode, setViewMode] = useState('edit'); // 'edit' | 'preview'
   const [toast, setToast] = useState(null);
   const [savedId, setSavedId] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const currentStep = STEPS[stepIndex];
+  const activeTemplate = draft.template || 'modern';
 
   // Autosave to store
   useEffect(() => {
     setCVData(draft);
   }, [draft, setCVData]);
-
-  // Load template from draft
-  useEffect(() => {
-    setActiveTemplate(draft.template || 'modern');
-  }, [draft.template]);
 
   const nextStep = () => {
     if (stepIndex < STEPS.length - 1) setStepIndex((prev) => prev + 1);
@@ -100,62 +162,66 @@ export default function Create() {
     if (stepIndex > 0) setStepIndex((prev) => prev - 1);
   };
 
+  // Functional updates prevent stale-closure writes when users type quickly.
   const setField = (key, value) => {
-    setDraft({ ...draft, [key]: value });
+    setDraft((prev) => ({ ...prev, [key]: value }));
   };
 
   const addEducation = (e) => {
     e.preventDefault();
-    setDraft({
-      ...draft,
+    setDraft((prev) => ({
+      ...prev,
       education: [
-        ...draft.education,
+        ...(prev.education || []),
         { id: Date.now(), school: '', degree: '', years: '', detail: '' },
       ],
-    });
+    }));
   };
 
   const addExperience = (e) => {
     e.preventDefault();
-    setDraft({
-      ...draft,
+    setDraft((prev) => ({
+      ...prev,
       experience: [
-        ...draft.experience,
+        ...(prev.experience || []),
         { id: Date.now(), role: '', org: '', dates: '', bullets: '' },
       ],
-    });
+    }));
   };
 
   const addProject = (e) => {
     e.preventDefault();
-    setDraft({
-      ...draft,
+    setDraft((prev) => ({
+      ...prev,
       projects: [
-        ...draft.projects,
+        ...(prev.projects || []),
         { id: Date.now(), name: '', tech: '', desc: '' },
       ],
-    });
+    }));
   };
 
   const addCert = (e) => {
     e.preventDefault();
-    setDraft({
-      ...draft,
-      certs: [...draft.certs, { id: Date.now(), name: '' }],
-    });
+    setDraft((prev) => ({
+      ...prev,
+      certs: [...(prev.certs || []), { id: Date.now(), name: '' }],
+    }));
   };
 
   const removeEntry = (array, id) => {
-    setDraft({ ...draft, [array]: draft[array].filter((item) => item.id !== id) });
+    setDraft((prev) => ({
+      ...prev,
+      [array]: (prev[array] || []).filter((item) => item.id !== id),
+    }));
   };
 
   const updateEntry = (array, id, field, value) => {
-    setDraft({
-      ...draft,
-      [array]: draft[array].map((item) =>
+    setDraft((prev) => ({
+      ...prev,
+      [array]: (prev[array] || []).map((item) =>
         item.id === id ? { ...item, [field]: value } : item
       ),
-    });
+    }));
   };
 
   const showToast = (message, type = 'success') => {
@@ -164,24 +230,25 @@ export default function Create() {
   };
 
   const educationText = (d) =>
-    d.education
+    (d.education || [])
       .map((e) => [e.degree, e.school, e.years, e.detail].filter(Boolean).join(' | '))
       .filter(Boolean)
       .join('\n');
 
   const experienceText = (d) =>
-    d.experience
+    (d.experience || [])
       .map((e) => [e.role, e.org, e.dates, e.bullets].filter(Boolean).join(' | '))
       .filter(Boolean)
       .join('\n');
 
   const projectsText = (d) =>
-    d.projects
+    (d.projects || [])
       .map((p) => [p.name, p.tech, p.desc].filter(Boolean).join(' | '))
       .filter(Boolean)
       .join('\n');
 
-  const certsText = (d) => d.certs.map((c) => c.name).filter(Boolean).join(', ');
+  const certsText = (d) =>
+    (d.certs || []).map((c) => c.name).filter(Boolean).join(', ');
 
   const buildResumeText = (d) => {
     const contact = [d.email, d.phone, d.location, d.linkedin, d.github].filter(Boolean).join(' | ');
@@ -190,11 +257,11 @@ export default function Create() {
       contact,
       '',
       d.summary ? `SUMMARY\n${d.summary}\n` : '',
-      d.education.length ? `EDUCATION\n${educationText(d)}\n` : '',
-      d.experience.length ? `EXPERIENCE\n${experienceText(d)}\n` : '',
-      d.projects.length ? `PROJECTS\n${projectsText(d)}\n` : '',
+      d.education?.length ? `EDUCATION\n${educationText(d)}\n` : '',
+      d.experience?.length ? `EXPERIENCE\n${experienceText(d)}\n` : '',
+      d.projects?.length ? `PROJECTS\n${projectsText(d)}\n` : '',
       d.skills ? `SKILLS\n${d.skills}\n` : '',
-      d.certs.length ? `CERTIFICATIONS\n${certsText(d)}\n` : '',
+      d.certs?.length ? `CERTIFICATIONS\n${certsText(d)}\n` : '',
       d.achievements?.length ? `ACHIEVEMENTS\n${d.achievements.join('\n')}\n` : '',
     ]
       .filter(Boolean)
@@ -215,7 +282,7 @@ export default function Create() {
     projects: projectsText(draft),
     skills: draft.skills.trim(),
     template: draft.template || 'modern',
-    role: draft.experience[0]?.role?.trim() || '',
+    role: draft.experience?.[0]?.role?.trim() || '',
     generatedText: buildResumeText(draft),
   });
 
@@ -224,15 +291,19 @@ export default function Create() {
       showToast('Please enter your name', 'error');
       return;
     }
+
     setSaving(true);
     try {
       const payload = buildPayload();
-      const saved = savedId
+      const isUpdate = Boolean(savedId);
+      const saved = isUpdate
         ? await api(`/api/cvs/${savedId}`, { method: 'PATCH', body: JSON.stringify(payload) })
         : await api('/api/cvs', { method: 'POST', body: JSON.stringify(payload) });
-      setSavedId(saved.id || saved._id);
-      showToast(savedId ? 'CV updated successfully!' : 'CV saved successfully!');
+      const realId = saved?.id || saved?._id;
+      if (realId) setSavedId(realId);
+      showToast(isUpdate ? 'CV updated successfully!' : 'CV saved successfully!');
     } catch (err) {
+      logRequestFailure('Save CV', err);
       showToast(errorMessage(err), 'error');
     } finally {
       setSaving(false);
@@ -240,13 +311,14 @@ export default function Create() {
   };
 
   const exportPDF = async () => {
-    const text = buildResumeText(draft);
-    if (!text) {
-      showToast('Add some CV content before exporting', 'error');
-      return;
-    }
-    setSaving(true);
     try {
+      const text = buildResumeText(draft);
+      if (!text) {
+        showToast('Add some CV content before exporting', 'error');
+        return;
+      }
+
+      setSaving(true);
       const blob = await apiBlob('/api/pdf', {
         method: 'POST',
         body: JSON.stringify({ title: draft.name || 'Resume', text }),
@@ -255,6 +327,7 @@ export default function Create() {
       downloadBlob(blob, `${slug}.pdf`);
       showToast('PDF downloaded');
     } catch (err) {
+      logRequestFailure('Export PDF', err);
       showToast(errorMessage(err), 'error');
     } finally {
       setSaving(false);
@@ -263,24 +336,129 @@ export default function Create() {
 
   const progress = Math.round(((stepIndex + 1) / STEPS.length) * 100);
 
+  const renderLivePreview = () => {
+    try {
+      return (
+        <Card
+          padding="none"
+          className={cn(
+            'overflow-hidden flex flex-col border-border',
+            viewMode === 'preview'
+              ? 'h-[calc(100vh-220px)] min-h-[520px]'
+              : 'h-[600px] max-h-[75vh] min-h-[420px]'
+          )}
+        >
+          <div className="relative h-full overflow-y-auto bg-white dark:bg-gray-900">
+            <div className={cn('a4 p-8', activeTemplate)}>
+              <h2 className="text-3xl font-bold text-foreground mb-2 uppercase tracking-tighter">
+                {draft.name || 'YOUR NAME'}
+              </h2>
+              <div className="text-sm text-muted-foreground mb-6 flex items-center gap-2">
+                {[draft.email, draft.phone, draft.location].filter(Boolean).join(' • ')}
+              </div>
+              {draft.summary && (
+                <div className="mb-6">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-1 border-b border-primary/20 pb-1">
+                    Professional Summary
+                  </h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">{draft.summary}</p>
+                </div>
+              )}
+              {draft.education.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 border-b border-primary/20 pb-1">
+                    Education
+                  </h4>
+                  {draft.education.map((edu) => (
+                    <div key={edu.id} className="mb-3">
+                      <h5 className="text-sm font-semibold text-foreground">{edu.school}</h5>
+                      <p className="text-xs text-muted-foreground">
+                        {[edu.degree, edu.years, edu.detail].filter(Boolean).join(' • ')}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {draft.experience.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 border-b border-primary/20 pb-1">
+                    Experience
+                  </h4>
+                  {draft.experience.map((exp) => (
+                    <div key={exp.id} className="mb-3">
+                      <h5 className="text-sm font-semibold text-foreground">
+                        {exp.role} <span className="text-xs text-muted-foreground font-normal">| {exp.org}</span>
+                      </h5>
+                      <p className="text-xs text-muted-foreground">{exp.dates}</p>
+                      <ul className="mt-1 text-sm text-gray-700 space-y-1 list-disc pl-4">
+                        {String(exp.bullets || '')
+                          .split('\n')
+                          .filter(Boolean)
+                          .map((bullet, i) => (
+                            <li key={`${exp.id}-bullet-${i}`}>{bullet}</li>
+                          ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {draft.projects.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 border-b border-primary/20 pb-1">
+                    Projects
+                  </h4>
+                  {draft.projects.map((proj) => (
+                    <div key={proj.id} className="mb-3">
+                      <h5 className="text-sm font-semibold text-foreground">{proj.name}</h5>
+                      <p className="text-xs text-muted-foreground">{proj.tech}</p>
+                      <p className="text-sm text-gray-700 mt-1">{proj.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {draft.skills && (
+                <div className="mb-6">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 border-b border-primary/20 pb-1">
+                    Skills
+                  </h4>
+                  <p className="text-sm text-gray-700">{draft.skills}</p>
+                </div>
+              )}
+              {draft.certs.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 border-b border-primary/20 pb-1">
+                    Certifications
+                  </h4>
+                  <p className="text-sm text-gray-700">
+                    {draft.certs.map((cert) => cert.name).filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      );
+    } catch (err) {
+      console.error(
+        '[Create] Live preview render failed. Check the draft data shape, template class, and preview styles.',
+        err
+      );
+      return (
+        <Card padding="md" className="border-destructive/40">
+          <p className="text-sm text-destructive">
+            The live preview could not be rendered. Open the browser console for details.
+          </p>
+        </Card>
+      );
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Create CV</h1>
-          <p className="text-muted-foreground">Build your professional resume step by step</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportPDF} disabled={!draft.name || saving}>
-            <Download className="w-4 h-4 mr-2" />
-            Export PDF
-          </Button>
-          <Button variant="primary" size="sm" onClick={saveCV} disabled={!draft.name || saving}>
-            <Save className="w-4 h-4 mr-2" />
-            {saving ? 'Saving…' : savedId ? 'Update CV' : 'Save CV'}
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Create CV</h1>
+        <p className="text-muted-foreground">Build your professional resume step by step</p>
       </div>
 
       {/* Progress Stepper */}
@@ -323,12 +501,12 @@ export default function Create() {
       </Card>
 
       {/* Main Content - Edit / Preview */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-6 min-h-[70vh]">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-6 lg:min-h-[70vh]">
         {/* Left: Edit Form */}
         <div className="space-y-6">
           {stepIndex === 0 && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Input
                   label="Full Name"
                   placeholder="John Doe"
@@ -345,7 +523,7 @@ export default function Create() {
                   leftIcon={<Mail className="w-4 h-4" />}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Input
                   label="Phone"
                   placeholder="+1 (555) 000-0000"
@@ -361,7 +539,7 @@ export default function Create() {
                   leftIcon={<MapPin className="w-4 h-4" />}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Input
                   label="LinkedIn"
                   placeholder="linkedin.com/in/johndoe"
@@ -391,7 +569,7 @@ export default function Create() {
               />
               <div className="bg-muted/50 rounded-lg p-4 border border-border">
                 <p className="text-xs text-muted-foreground">
-                  Tip: Keep it concise. Mention your years of experience, key skills, and what you're looking for.
+                  Tip: Keep it concise. Mention your years of experience, key skills, and what you&apos;re looking for.
                 </p>
               </div>
             </div>
@@ -441,7 +619,7 @@ export default function Create() {
               ))}
               {draft.education.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p>No education entries yet. Click "Add School" to get started.</p>
+                  <p>No education entries yet. Click &quot;Add School&quot; to get started.</p>
                 </div>
               )}
               <Button variant="outline" size="sm" onClick={addEducation} className="w-full mt-4">
@@ -497,7 +675,7 @@ export default function Create() {
               ))}
               {draft.experience.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p>No experience entries yet. Click "Add Role" to get started.</p>
+                  <p>No experience entries yet. Click &quot;Add Role&quot; to get started.</p>
                 </div>
               )}
               <Button variant="outline" size="sm" onClick={addExperience} className="w-full mt-4">
@@ -547,7 +725,7 @@ export default function Create() {
               ))}
               {draft.projects.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p>No project entries yet. Click "Add Project" to get started.</p>
+                  <p>No project entries yet. Click &quot;Add Project&quot; to get started.</p>
                 </div>
               )}
               <Button variant="outline" size="sm" onClick={addProject} className="w-full mt-4">
@@ -600,7 +778,6 @@ export default function Create() {
                   <button
                     key={tpl.key}
                     onClick={() => {
-                      setActiveTemplate(tpl.key);
                       setField('template', tpl.key);
                     }}
                     className={cn(
@@ -635,172 +812,110 @@ export default function Create() {
           )}
         </div>
 
-        {/* Right: Live Preview */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
+        {/* Right: Navigation controls + Live Preview */}
+        <div className="space-y-5">
+          {/* Navigation controls (top) */}
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="outline"
+              fullWidth
+              disabled={stepIndex === STEPS.length - 1}
+              onClick={() => {
+                setStepIndex(STEPS.length - 1);
+                setViewMode('preview');
+              }}
+            >
+              Finish & Preview
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="primary"
+              fullWidth
+              onClick={nextStep}
+              disabled={stepIndex === STEPS.length - 1}
+            >
+              Next Step
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              fullWidth
+              disabled={stepIndex === 0}
+              onClick={prevStep}
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Back
+            </Button>
+          </div>
+
+          {/* Live preview header and mode toggle */}
+          <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
             <h3 className="text-lg font-semibold text-foreground">Live Preview</h3>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setViewMode('edit')}
+                aria-pressed={viewMode === 'edit'}
                 className={cn(
-                  'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                   viewMode === 'edit'
                     ? 'bg-primary text-white shadow-sm'
                     : 'bg-muted text-muted-foreground hover:bg-muted-hover'
                 )}
               >
+                <Edit className="w-3.5 h-3.5" />
                 Edit
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode('preview')}
+                aria-pressed={viewMode === 'preview'}
                 className={cn(
-                  'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                   viewMode === 'preview'
                     ? 'bg-primary text-white shadow-sm'
                     : 'bg-muted text-muted-foreground hover:bg-muted-hover'
                 )}
               >
+                <Eye className="w-3.5 h-3.5" />
                 Preview
               </button>
             </div>
           </div>
 
-          {viewMode === 'preview' && (
-            <Card padding="none" className="h-[calc(100vh-200px)] overflow-hidden flex flex-col">
-              <div className="relative h-full overflow-y-auto bg-white dark:bg-gray-900">
-                <div className={`a4 ${activeTemplate} p-8`}>
-                  <h2 className="text-3xl font-bold text-foreground mb-2 uppercase tracking-tighter">
-                    {draft.name || 'YOUR NAME'}
-                  </h2>
-                  <div className="text-sm text-muted-foreground mb-6 flex items-center gap-2">
-                    {[draft.email, draft.phone, draft.location].filter(Boolean).join(' • ')}
-                  </div>
-                  {draft.summary && (
-                    <div className="mb-6">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-1 border-b border-primary/20 pb-1">
-                        Professional Summary
-                      </h4>
-                      <p className="text-sm text-gray-700 leading-relaxed">{draft.summary}</p>
-                    </div>
-                  )}
-                  {draft.education.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 border-b border-primary/20 pb-1">
-                        Education
-                      </h4>
-                      {draft.education.map((edu) => (
-                        <div key={edu.id} className="mb-3">
-                          <h5 className="text-sm font-semibold text-foreground">{edu.school}</h5>
-                          <p className="text-xs text-muted-foreground">
-                            {edu.degree} • {edu.years} {edu.detail ? `• ${edu.detail}` : ''}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {draft.experience.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 border-b border-primary/20 pb-1">
-                        Experience
-                      </h4>
-                      {draft.experience.map((exp) => (
-                        <div key={exp.id} className="mb-3">
-                          <h5 className="text-sm font-semibold text-foreground">
-                            {exp.role} <span className="text-xs text-muted-foreground font-normal">| {exp.org}</span>
-                          </h5>
-                          <p className="text-xs text-muted-foreground">{exp.dates}</p>
-                          <ul className="mt-1 text-sm text-gray-700 space-y-1 list-disc pl-4">
-                            {exp.bullets.split('\n').filter(Boolean).map((bullet, i) => (
-                              <li key={i}>{bullet}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {draft.projects.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 border-b border-primary/20 pb-1">
-                        Projects
-                      </h4>
-                      {draft.projects.map((proj) => (
-                        <div key={proj.id} className="mb-3">
-                          <h5 className="text-sm font-semibold text-foreground">{proj.name}</h5>
-                          <p className="text-xs text-muted-foreground">{proj.tech}</p>
-                          <p className="text-sm text-gray-700 mt-1">{proj.desc}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {draft.skills && (
-                    <div className="mb-6">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 border-b border-primary/20 pb-1">
-                        Skills
-                      </h4>
-                      <p className="text-sm text-gray-700">{draft.skills}</p>
-                    </div>
-                  )}
-                  {draft.certs.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 border-b border-primary/20 pb-1">
-                        Certifications
-                      </h4>
-                      <p className="text-sm text-gray-700">{draft.certs.map(c => c.name).join(', ')}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Card>
-          )}
+          {/* Autosave status */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Save className="w-3 h-3" />
+            <span>Auto-save enabled - changes saved automatically</span>
+          </div>
 
-          {viewMode === 'edit' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                <Save className="w-3 h-3" />
-                <span>Auto-save enabled - changes saved automatically</span>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={saveCV}>
-                  Save Draft
-                </Button>
-                <Button variant="primary" size="sm" onClick={exportPDF}>
-                  Export PDF
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+          {/* Preview actions in the required order */}
+          <div className="space-y-2">
+            <Button
+              variant="outline"
+              size="sm"
+              fullWidth
+              onClick={saveCV}
+              disabled={!draft.name.trim() || saving}
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'Saving…' : 'Save Draft'}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              fullWidth
+              onClick={exportPDF}
+              disabled={!draft.name.trim() || saving}
+            >
+              <Download className="w-4 h-4" />
+              Export PDF
+            </Button>
+          </div>
 
-      {/* Navigation */}
-      <div className="flex items-center justify-between pt-6 border-t border-border">
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            disabled={stepIndex === 0}
-            onClick={prevStep}
-          >
-            <ChevronLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant={stepIndex === STEPS.length - 1 ? 'primary' : 'outline'}
-            disabled={stepIndex === STEPS.length - 1}
-            onClick={() => navigate('/preview')}
-          >
-            Finish & Preview
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
-          <Button
-            variant="primary"
-            onClick={nextStep}
-            disabled={stepIndex === STEPS.length - 1}
-          >
-            Next Step
-            <ChevronRight className="w-4 h-4 ml-2" />
-          </Button>
+          {/* The preview is always mounted and reads directly from draft, so every
+              keystroke re-renders this block immediately in both Edit and Preview modes. */}
+          {renderLivePreview()}
         </div>
       </div>
 

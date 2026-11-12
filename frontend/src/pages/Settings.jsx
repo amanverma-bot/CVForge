@@ -17,7 +17,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { useStore } from '@/store/useStore';
-import { api, errorMessage, downloadBlob } from '@/lib/api';
+import { api, errorMessage, downloadBlob, logoutSession } from '@/lib/api';
 
 export default function Settings() {
   const { user, logout, theme: storeTheme, setTheme: setStoreTheme } = useStore();
@@ -32,6 +32,7 @@ export default function Settings() {
 
   const handleLogout = () => {
     if (confirm('Are you sure you want to sign out?')) {
+      logoutSession();
       logout();
       navigate('/login');
     }
@@ -92,23 +93,33 @@ export default function Settings() {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <InputLabel>Display Name</InputLabel>
-          <input className="input w-full" value={user?.name || ''} readOnly />
-          <InputLabel>Email Address</InputLabel>
-          <input className="input w-full" value={user?.email || 'Not provided'} type="email" readOnly />
+          <div className="flex flex-col">
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block uppercase tracking-wider">
+              Display Name
+            </label>
+            <input className="input w-full" value={user?.name || ''} readOnly />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block uppercase tracking-wider">
+              Email Address
+            </label>
+            <input className="input w-full" value={user?.email || 'Not provided'} type="email" readOnly />
+          </div>
         </div>
-        <Button variant="outline" size="sm" className="w-full" onClick={handleExportData} disabled={busyAction === 'export'}>
-          <Download className="w-4 h-4 mr-2" />
-          {busyAction === 'export' ? 'Exporting…' : 'Export My Data (JSON)'}
-        </Button>
-        <Button variant="destructive" size="sm" className="w-full" onClick={handleLogout}>
-          <LogOut className="w-4 h-4 mr-2" />
-          Sign Out
-        </Button>
-        <Button variant="destructive" size="sm" className="w-full" onClick={handleDeleteAccount} disabled={busyAction === 'delete'}>
-          <Trash2 className="w-4 h-4 mr-2" />
-          {busyAction === 'delete' ? 'Deleting…' : 'Delete Account & All Data'}
-        </Button>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Button variant="outline" size="sm" className="w-full" onClick={handleExportData} disabled={busyAction === 'export'}>
+            <Download className="w-4 h-4 mr-2" />
+            {busyAction === 'export' ? 'Exporting…' : 'Export My Data'}
+          </Button>
+          <Button variant="outline" size="sm" className="w-full" onClick={handleLogout}>
+            <LogOut className="w-4 h-4 mr-2" />
+            Sign Out
+          </Button>
+          <Button variant="destructive" size="sm" className="w-full" onClick={handleDeleteAccount} disabled={busyAction === 'delete'}>
+            <Trash2 className="w-4 h-4 mr-2" />
+            {busyAction === 'delete' ? 'Deleting…' : 'Delete Account'}
+          </Button>
+        </div>
       </Card>
 
       {/* Preferences Section */}
@@ -118,13 +129,17 @@ export default function Settings() {
           Preferences
         </h2>
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-semibold text-foreground">Theme</h3>
               <p className="text-xs text-muted-foreground">Choose light or dark mode</p>
             </div>
             <div className="flex gap-2">
-              {[['light', 'Light'], ['dark', 'Dark'], ['system', 'System']].map(([val, label]) => (
+              {[
+                ['light', 'Light'],
+                ['dark', 'Dark'],
+                ['system', 'System'],
+              ].map(([val, label]) => (
                 <button
                   key={val}
                   onClick={() => handleThemeChange(val)}
@@ -234,12 +249,4 @@ export default function Settings() {
 
 function cn(...classes) {
   return classes.filter(Boolean).join(' ');
-}
-
-function InputLabel({ children }) {
-  return (
-    <label className="text-xs font-semibold text-muted-foreground mb-1 block uppercase tracking-wider">
-      {children}
-    </label>
-  );
 }

@@ -1,5 +1,27 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
+.env.production
+.env.development
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+frontend/.env.development
+backend/.env
+backend/.env.local
+backend/.env.production
+backend/.env.development
 *.log
 .DS_Store
+
+# Firebase Admin service-account material must live outside this repository.
+# These patterns are defense in depth; backend env validation also rejects
+# in-repo or group/world-readable key files.
+service-account*.json
+firebase-adminsdk*.json
+*firebase-admin*.json
+**/*service-account*.json
+!.env.example
+!frontend/.env.example

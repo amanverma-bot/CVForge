@@ -12,33 +12,45 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const variants: Record<string, string> = {
-  primary: 'bg-primary text-on-primary shadow-md hover:bg-primary-hover hover:shadow-lg active:translate-y-0 active:shadow-sm',
-  secondary: 'bg-secondary text-on-secondary shadow-sm hover:bg-secondary-hover hover:shadow-md active:translate-y-0 active:shadow-sm',
-  accent: 'bg-accent text-on-accent shadow-md hover:bg-accent-hover hover:shadow-lg active:translate-y-0 active:shadow-sm',
-  outline: 'bg-transparent text-foreground border border-border shadow-sm hover:bg-muted hover:border-muted-foreground active:translate-y-0',
-  ghost: 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground active:translate-y-0',
-  destructive: 'bg-destructive text-on-destructive shadow-sm hover:bg-destructive-hover active:translate-y-0 active:shadow-sm',
+  primary: 'bg-primary text-on-primary shadow-sm hover:bg-primary-hover hover:shadow-md active:bg-primary-hover',
+  secondary: 'bg-secondary text-on-secondary shadow-sm hover:bg-secondary-hover hover:shadow-md active:bg-secondary-hover',
+  accent: 'bg-accent text-on-accent shadow-sm hover:bg-accent-hover hover:shadow-md active:bg-accent-hover',
+  outline: 'border border-border bg-transparent text-foreground shadow-sm hover:bg-primary/5 hover:border-primary active:bg-primary/10',
+  ghost: 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted/50',
+  destructive: 'bg-destructive text-on-destructive shadow-sm hover:bg-destructive-hover active:bg-destructive-hover',
 };
 
 const sizes: Record<string, string> = {
-  sm: 'px-3 py-1.5 text-sm',
-  md: 'px-4 py-2 text-sm font-semibold',
-  lg: 'px-6 py-3 text-base font-semibold',
+  sm: 'px-3 py-1.5 text-sm font-medium',
+  md: 'px-4 py-2 text-sm font-medium',
+  lg: 'px-6 py-3 text-base font-medium',
 };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'primary', size = 'md', fullWidth, loading, leftIcon, rightIcon, asChild, ...props }, ref) => {
+  ({ className, variant = 'primary', size = 'md', fullWidth, loading, leftIcon, rightIcon, asChild, children, ...props }, ref) => {
+    const classes = cn(
+      'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-200',
+      'disabled:opacity-50 disabled:pointer-events-none cursor-not-allowed',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+      variants[variant],
+      sizes[size],
+      fullWidth && 'w-full',
+      className
+    );
+
+    if (asChild) {
+      const child = React.Children.only(children);
+      return React.cloneElement(child, {
+        ...props,
+        ref,
+        className: cn(classes, child.props.className),
+      });
+    }
+
     return (
       <button
         ref={ref}
-        className={cn(
-          'btn inline-flex items-center justify-center gap-2 rounded-md transition-all duration-200',
-          'disabled:opacity-50 disabled:pointer-events-none',
-          variants[variant],
-          sizes[size],
-          fullWidth && 'w-full',
-          className
-        )}
+        className={classes}
         disabled={loading || props.disabled}
         {...props}
       >
@@ -58,7 +70,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           </svg>
         )}
         {leftIcon && <span className="flex-shrink-0">{leftIcon}</span>}
-        {props.children}
+        {children}
         {rightIcon && <span className="flex-shrink-0">{rightIcon}</span>}
       </button>
     );

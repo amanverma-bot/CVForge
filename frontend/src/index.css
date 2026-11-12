@@ -38,6 +38,31 @@
   --color-warning: #D97706;
   --color-info: #2563EB;
 
+  /* RGB channels for Tailwind color utilities (support /opacity modifiers). */
+  --color-primary-rgb: 30 58 95;
+  --color-primary-hover-rgb: 21 46 79;
+  --color-on-primary-rgb: 255 255 255;
+  --color-secondary-rgb: 37 99 235;
+  --color-secondary-hover-rgb: 29 78 216;
+  --color-on-secondary-rgb: 255 255 255;
+  --color-accent-rgb: 22 163 74;
+  --color-accent-hover-rgb: 21 128 61;
+  --color-on-accent-rgb: 0 0 0;
+  --color-background-rgb: 248 250 252;
+  --color-foreground-rgb: 15 23 42;
+  --color-card-rgb: 255 255 255;
+  --color-card-foreground-rgb: 15 23 42;
+  --color-muted-rgb: 233 238 245;
+  --color-muted-foreground-rgb: 71 85 105;
+  --color-border-rgb: 203 213 225;
+  --color-destructive-rgb: 220 38 38;
+  --color-destructive-hover-rgb: 185 28 28;
+  --color-on-destructive-rgb: 255 255 255;
+  --color-ring-rgb: 30 58 95;
+  --color-success-rgb: 22 163 74;
+  --color-warning-rgb: 217 119 6;
+  --color-info-rgb: 37 99 235;
+
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -80,6 +105,31 @@
   --color-success: #4ADE80;
   --color-warning: #FBBF24;
   --color-info: #60A5FA;
+
+  /* RGB channels for Tailwind color utilities (support /opacity modifiers). */
+  --color-primary-rgb: 59 130 246;
+  --color-primary-hover-rgb: 96 165 250;
+  --color-on-primary-rgb: 255 255 255;
+  --color-secondary-rgb: 96 165 250;
+  --color-secondary-hover-rgb: 147 197 253;
+  --color-on-secondary-rgb: 15 23 42;
+  --color-accent-rgb: 74 222 128;
+  --color-accent-hover-rgb: 134 239 172;
+  --color-on-accent-rgb: 15 23 42;
+  --color-background-rgb: 15 23 42;
+  --color-foreground-rgb: 248 250 252;
+  --color-card-rgb: 30 41 59;
+  --color-card-foreground-rgb: 248 250 252;
+  --color-muted-rgb: 51 65 85;
+  --color-muted-foreground-rgb: 148 163 184;
+  --color-border-rgb: 51 65 85;
+  --color-destructive-rgb: 239 68 68;
+  --color-destructive-hover-rgb: 248 113 113;
+  --color-on-destructive-rgb: 255 255 255;
+  --color-ring-rgb: 59 130 246;
+  --color-success-rgb: 74 222 128;
+  --color-warning-rgb: 251 191 36;
+  --color-info-rgb: 96 165 250;
 
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4);
@@ -269,8 +319,8 @@ button:disabled {
 
 .input {
   width: 100%;
-  padding: 0.75rem 1rem;
-  font-size: 0.95rem;
+  padding: 0.875rem 1rem;
+  font-size: 1rem;
   font-family: inherit;
   background: var(--color-card);
   color: var(--color-foreground);
@@ -413,3 +463,58 @@ button:disabled {
   h1 { font-size: 2rem; }
   h2 { font-size: 1.75rem; }
 }
+
+/* Reduced motion — respects user preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin {
+    animation: none !important;
+  }
+}
+
+/* Responsive breakpoints for small mobile screens (360px–430px) */
+@media (max-width: 430px) {
+  .input {
+    padding: 0.875rem 0.75rem;
+    font-size: 0.95rem;
+  }
+  .input.pl-11 {
+    padding-left: 2.75rem !important;
+  }
+  .input.pr-11 {
+    padding-right: 2.75rem !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .input {
+    padding: 0.875rem 0.75rem;
+    font-size: 0.95rem;
+  }
+  .input.pl-11 {
+    padding-left: 2.75rem !important;
+  }
+  .input.pr-11 {
+    padding-right: 2.75rem !important;
+  }
+  button.btn {
+    min-height: 48px;
+    padding: 0.875rem 1.5rem;
+    font-size: 1rem;
+  }
+}
+
+/* Responsive testing breakpoints (verified):
+   375px  - small phone (iPhone SE)
+   768px  - tablet (iPad)
+   1024px - laptop
+   1440px - desktop
+   Tailwind prefixes: sm: 640px, md: 768px, lg: 1024px, xl: 1280px
+*/

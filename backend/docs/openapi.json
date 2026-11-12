@@ -36,7 +36,23 @@
       },
       "AuthToken": {
         "type": "object",
-        "properties": { "token": { "type": "string" }, "username": { "type": "string" }, "name": { "type": "string" } }
+        "properties": {
+          "token": { "type": "string" },
+          "username": { "type": "string" },
+          "name": { "type": "string" },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "username": { "type": "string" },
+              "email": { "type": "string", "nullable": true },
+              "avatar": { "type": "string", "nullable": true },
+              "role": { "type": "string", "enum": ["free", "pro", "enterprise"] },
+              "createdAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
       },
       "RegisterRequest": {
         "type": "object",
@@ -84,7 +100,37 @@
   "security": [{ "bearerAuth": [] }],
   "paths": {
     "/api/health": {
-      "get": { "tags": ["System"], "security": [], "summary": "Health check", "responses": { "200": { "description": "ok" } } }
+      "get": {
+        "tags": ["System"],
+        "security": [],
+        "summary": "Health check with actual AI provider availability",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "mongo": { "type": "boolean" },
+                    "llm": { "type": "boolean" },
+                    "ai": {
+                      "type": "object",
+                      "properties": {
+                        "active": { "type": "string", "enum": ["openai", "local", "offline"] },
+                        "available": { "type": "boolean" },
+                        "source": { "type": "string", "enum": ["completion-probe"] },
+                        "providers": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "/api/demo": {
       "get": { "tags": ["AI"], "security": [], "summary": "Demo analysis with demo CV/JD", "responses": { "200": { "description": "Analysis result" } } }
@@ -113,12 +159,89 @@
     "/api/auth/me": {
       "get": { "tags": ["Auth"], "summary": "Current token identity", "responses": { "200": { "description": "User" }, "401": { "description": "Unauthorized" } } }
     },
+    "/api/auth/google": {
+      "get": { "tags": ["Auth"], "security": [], "summary": "Start Google OAuth (redirects to Google)", "responses": { "302": { "description": "Redirect to Google consent, or back to /login?oauth_error=... when unconfigured" } } }
+    },
+    "/api/auth/google/callback": {
+      "get": {
+        "tags": ["Auth"],
+        "security": [],
+        "summary": "Google OAuth callback",
+        "parameters": [
+          { "name": "code", "in": "query", "schema": { "type": "string" } },
+          { "name": "state", "in": "query", "schema": { "type": "string" } },
+          { "name": "error", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "302": { "description": "Redirect to /login?oauth=success after setting the short-lived HttpOnly OAuth cookie, or /login?oauth_error=..." } }
+      }
+    },
+    "/api/auth/github": {
+      "get": { "tags": ["Auth"], "security": [], "summary": "Start GitHub OAuth (redirects to GitHub)", "responses": { "302": { "description": "Redirect to GitHub authorization, or back to /login?oauth_error=... when unconfigured" } } }
+    },
+    "/api/auth/github/callback": {
+      "get": {
+        "tags": ["Auth"],
+        "security": [],
+        "summary": "GitHub OAuth callback",
+        "parameters": [
+          { "name": "code", "in": "query", "schema": { "type": "string" } },
+          { "name": "state", "in": "query", "schema": { "type": "string" } },
+          { "name": "error", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "302": { "description": "Redirect to /login?oauth=success after setting the short-lived HttpOnly OAuth cookie, or /login?oauth_error=..." } }
+      }
+    },
+    "/api/auth/oauth/session": {
+      "post": {
+        "tags": ["Auth"],
+        "security": [],
+        "summary": "Exchange the short-lived HttpOnly OAuth cookie for the normal JWT session",
+        "responses": {
+          "200": { "description": "Token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthToken" } } } },
+          "401": { "description": "OAuth session cookie missing, expired, or account no longer exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/auth/firebase": {
+      "post": {
+        "tags": ["Auth"],
+        "security": [],
+        "summary": "Exchange a Firebase Google ID token for the normal CVForge JWT",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["idToken"],
+                "properties": { "idToken": { "type": "string", "maxLength": 8192 } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthToken" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Invalid, expired, wrong-project, or non-Google Firebase token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "409": { "description": "Verified email is already linked to a conflicting account", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "503": { "description": "Firebase Admin is not configured", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
     "/api/analyze": {
       "post": {
         "tags": ["AI"],
         "summary": "Analyze CV vs JD (JSON or multipart with cv_file/jd_file)",
         "requestBody": { "content": { "multipart/form-data": { "schema": { "type": "object", "properties": { "cv_text": { "type": "string" }, "jd_text": { "type": "string" }, "jd_url": { "type": "string" }, "mode": { "type": "string", "enum": ["fresher", "default"] }, "cv_file": { "type": "string", "format": "binary" }, "jd_file": { "type": "string", "format": "binary" } } } }, "application/json": { "schema": { "type": "object", "properties": { "cv_text": { "type": "string" }, "jd_text": { "type": "string" }, "jd_url": { "type": "string" }, "mode": { "type": "string" } } } } } },
         "responses": { "200": { "description": "Analysis with scores, gaps, suggestions" }, "401": { "description": "Unauthorized" }, "413": { "description": "File too large" }, "415": { "description": "File type rejected" } }
+      }
+    },
+    "/api/jd-import": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Import job-description text from a public URL (SSRF-guarded)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["url"], "properties": { "url": { "type": "string", "format": "uri", "maxLength": 500 } } } } } },
+        "responses": { "200": { "description": "Extracted text and length" }, "400": { "description": "Invalid URL" }, "401": { "description": "Unauthorized" }, "422": { "description": "URL blocked or no readable job description" } }
       }
     },
     "/api/quickfix": { "post": { "tags": ["AI"], "summary": "One-tap bullet fixes", "responses": { "200": { "description": "pairs[]" } } } },

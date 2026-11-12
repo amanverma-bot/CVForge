@@ -20,16 +20,18 @@ router.get("/captcha", (req, res) => {
   res.json({ question: c.question, token: c.token });
 });
 
-// Public: health check for Render / uptime monitors. No internals beyond booleans.
-router.get("/health", (_req, res) =>
+// Public: health check for Render / uptime monitors. Exposes provider availability, never credentials.
+router.get("/health", asyncHandler(async (_req, res) => {
+  const ai = await llm.healthStatus();
   res.json({
     ok: true,
     mongo: store.isMongo(),
-    llm: llm.hasKey(),
+    llm: ai.available,
+    ai,
     time: new Date().toISOString(),
     version: require("../package.json").version,
-  })
-);
+  });
+}));
 
 // Public: demo analysis with demo data (cheap, offline scoring).
 router.get("/demo", (_req, res) => {

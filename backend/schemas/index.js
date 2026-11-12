@@ -74,16 +74,24 @@ const register = z.object({
     .refine((s) => /^[a-zA-Z0-9_-]{3,32}$/.test(s), { message: "Name must be 3-32 chars: letters, numbers, _ or -" }),
   email: z.preprocess(
     (v) => (v === undefined || v === null || v === "" ? undefined : String(v).trim()),
-    z.string().email("Invalid email").max(120).optional()
+    z.string().email("Invalid email").max(120)
   ),
   password: z.string().min(8, "Password must be at least 8 characters").max(128),
+  confirm_password: z.string().min(1, "Please confirm your password"),
   captcha_token: z.string().min(8).max(200),
   captcha_answer: z.preprocess((v) => Number(v), z.number().int().min(-1000).max(1000)),
+}).refine((data) => data.password === data.confirm_password, {
+  message: "Passwords do not match",
+  path: ["confirm_password"],
 });
 
 const login = z.object({
   name: z.string().transform((s) => s.replace(CONTROL_CHARS, "").trim()).pipe(z.string().min(1).max(120)),
   password: z.string().min(1).max(128),
+});
+
+const firebaseLogin = z.object({
+  idToken: required(8192),
 });
 
 const analyze = z.object({
@@ -110,6 +118,10 @@ const jdCv = z.object({
   profile: profileInput,
   jd_text: optional(20000),
   jd_url: optionalUrl,
+});
+
+const jdImport = z.object({
+  url: z.string().trim().url("Must be a valid URL").max(500),
 });
 
 const cvJdPair = z.object({
@@ -204,12 +216,14 @@ const tokenParam = z.object({ token: z.string().regex(/^[a-f0-9]{8,64}$/, "Inval
 module.exports = {
   register,
   login,
+  firebaseLogin,
   analyze,
   quickfix,
   grammar,
   build,
   jdBreakdown,
   jdCv,
+  jdImport,
   cvJdPair,
   coverLetter,
   match,

@@ -91,7 +91,7 @@ export default function Templates() {
             Choose from professionally designed, ATS-optimized resume templates.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm">
             <Palette className="w-4 h-4 mr-1" />
             All Templates
@@ -103,7 +103,7 @@ export default function Templates() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
         {templates.map((tpl) => (
           <Card
             key={tpl.key}
@@ -123,7 +123,7 @@ export default function Templates() {
               </div>
             </div>
             <div className="p-5">
-              <div className="flex justify-between items-start mb-2">
+              <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
                 <h3 className="text-lg font-bold text-foreground">{tpl.name}</h3>
                 <div className="flex items-center gap-1 text-warning">
                   {[1, 2, 3, 4, 5].map((i) => (
@@ -135,7 +135,7 @@ export default function Templates() {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground mb-4">{tpl.desc}</p>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <Badge variant="muted" className="text-xs">{tpl.category}</Badge>
                 <span className="text-xs text-muted-foreground">{tpl.downloads} downloads</span>
               </div>

@@ -47,9 +47,14 @@ function errorHandler(err, req, res, next) {
   }
 
   // Multer errors
-  if (err.code === "LIMIT_FILE_SIZE" || err.message?.includes("File too large")) {
-    statusCode = 413;
-    message = "File too large";
+  if (err.name === "MulterError" || err.code?.startsWith("LIMIT_")) {
+    statusCode = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+    message =
+      err.code === "LIMIT_FILE_SIZE"
+        ? "File too large"
+        : err.code === "LIMIT_UNEXPECTED_FILE"
+          ? "Unexpected file field"
+          : "Invalid file upload";
   }
 
   // CastError / invalid ObjectId → 404 (hide existence)

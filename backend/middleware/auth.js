@@ -10,10 +10,38 @@ const ISSUER = "cvforge";
 
 function signToken(user) {
   return jwt.sign(
-    { id: user.id, name: user.name, email: user.email, role: user.role },
+    {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      ver: Number(user.tokenVersion || 0),
+    },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRY, issuer: ISSUER, subject: user.id }
   );
+}
+
+function publicUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    username: user.name,
+    email: user.email || null,
+    avatar: user.avatar || null,
+    role: user.role || "free",
+    createdAt: user.createdAt,
+  };
+}
+
+function authResponse(user) {
+  return {
+    token: signToken(user),
+    username: user.name,
+    name: user.name,
+    user: publicUser(user),
+  };
 }
 
 function verifyToken(token) {
@@ -49,18 +77,17 @@ async function requireAuth(req, res, next) {
     err.statusCode = 401;
     return next(err);
   }
+  if (Number(decoded.ver || 0) !== Number(user.tokenVersion || 0)) {
+    const err = new Error("Session has been signed out");
+    err.statusCode = 401;
+    return next(err);
+  }
 
-  req.user = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role || "free",
-    createdAt: user.createdAt,
-  };
+  req.user = publicUser(user);
   next();
 }
 
-function optionalAuth(req, res, next) {
+async function optionalAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return next();
@@ -68,16 +95,14 @@ function optionalAuth(req, res, next) {
   const token = authHeader.slice(7);
   try {
     const decoded = verifyToken(token);
-    req.user = {
-      id: decoded.sub || decoded.id,
-      name: decoded.name,
-      email: decoded.email,
-      role: decoded.role || "free",
-    };
+    const user = await store.getUserById(decoded.sub || decoded.id);
+    if (user && Number(decoded.ver || 0) === Number(user.tokenVersion || 0)) {
+      req.user = publicUser(user);
+    }
   } catch {
-    // ignore invalid tokens in optional mode
+    // Ignore invalid, expired, revoked, or deleted-account tokens in optional mode.
   }
   next();
 }
 
-module.exports = { signToken, verifyToken, requireAuth, optionalAuth, JWT_SECRET, JWT_EXPIRY, ISSUER };
+module.exports = { signToken, verifyToken, requireAuth, optionalAuth, publicUser, authResponse, JWT_SECRET, JWT_EXPIRY, ISSUER };

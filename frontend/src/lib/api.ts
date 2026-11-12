@@ -1,4 +1,5 @@
 import { useStore } from '@/store/useStore';
+import { signOutFirebase } from '@/lib/firebase';
 
 export class ApiError extends Error {
   status: number;
@@ -24,6 +25,7 @@ async function request(path: string, options: ApiOptions = {}): Promise<Response
   const res = await fetch(path, { ...init, headers });
   if (res.status === 401 && token && !skipAuth) {
     useStore.getState().logout();
+    signOutFirebase();
   }
   return res;
 }
@@ -60,6 +62,13 @@ export async function apiBlob(path: string, options: ApiOptions = {}): Promise<B
 export function errorMessage(err: unknown): string {
   if (err instanceof ApiError || err instanceof Error) return err.message;
   return 'Something went wrong';
+}
+
+// Best-effort server-side sign-out: revokes the current JWT on the backend.
+// Local state is cleared regardless of the network result.
+export function logoutSession() {
+  signOutFirebase();
+  api('/api/auth/logout', { method: 'POST' }).catch(() => {});
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

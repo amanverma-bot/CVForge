@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 
 export default function Privacy() {
   return (
-    <div className="max-w-3xl mx-auto space-y-8 px-4">
+    <div className="max-w-3xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Privacy Policy</h1>
@@ -21,7 +21,7 @@ export default function Privacy() {
         </div>
       </div>
 
-      <Card padding="lg" className="border-border space-y-6">
+      <Card padding="none" className="border-border space-y-6 p-5 sm:p-8">
         <div className="flex items-center gap-3 mb-2">
           <ShieldCheck className="w-5 h-5 text-primary" />
           <h2 className="text-lg font-bold text-foreground">Your Data, Your Control</h2>

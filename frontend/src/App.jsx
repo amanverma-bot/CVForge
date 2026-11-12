@@ -81,9 +81,9 @@ function App() {
         <Navbar />
         <Suspense fallback={<LoadingFallback />}>
           {isAuthenticated ? (
-            <div className="flex">
+            <div className="flex min-h-screen">
               <Sidebar />
-              <main className="flex-1 md:pl-64 pt-16 pb-24">
+              <main className="min-w-0 flex-1 px-4 pt-24 pb-24 sm:px-6 lg:px-8">
                 <Routes>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/create" element={<Create />} />
@@ -94,6 +94,8 @@ function App() {
                   <Route path="/templates" element={<Templates />} />
                   <Route path="/privacy" element={<Privacy />} />
                   <Route path="/terms" element={<Terms />} />
+                  <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/signup" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </main>
@@ -103,14 +105,15 @@ function App() {
               <Routes>
                 <Route path="/" element={<Landing />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Login initialMode="register" />} />
                 <Route path="/create" element={<Navigate to="/login" replace />} />
                 <Route path="/analyzer" element={<Navigate to="/login" replace />} />
                 <Route path="/match" element={<Navigate to="/login" replace />} />
                 <Route path="/tracker" element={<Navigate to="/login" replace />} />
                 <Route path="/settings" element={<Navigate to="/login" replace />} />
                 <Route path="/templates" element={<Navigate to="/login" replace />} />
-                <Route path="/privacy" element={<Privacy />} />
-                <Route path="/terms" element={<Terms />} />
+                <Route path="/privacy" element={<div className="px-4"><Privacy /></div>} />
+                <Route path="/terms" element={<div className="px-4"><Terms /></div>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>

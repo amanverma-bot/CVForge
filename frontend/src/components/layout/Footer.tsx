@@ -28,7 +28,6 @@ const footerLinks = [
     items: [
       { name: 'Privacy', href: '/privacy' },
       { name: 'Terms', href: '/terms' },
-      { name: 'Cookie Policy', href: '/' },
       { name: 'Security', href: '/' },
     ],
   },

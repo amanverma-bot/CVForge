@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>CVForge — Premium 3D / Glass Sample</title>
+  <link rel="stylesheet" href="./premium-3d.css">
+</head>
+<body>
+  <div class="premium-dashboard">
+    <div class="premium-aura premium-aura--mint" aria-hidden="true"></div>
+    <div class="premium-aura premium-aura--sky" aria-hidden="true"></div>
+
+    <header class="premium-topbar">
+      <div class="premium-brand">
+        <span class="premium-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.25 3.75h6.9l4.6 4.65v11.85H7.25a2 2 0 0 1-2-2V5.75a2 2 0 0 1 2-2Z"/><path d="M14 3.9v4.6h4.6"/><path d="M8.75 12.25h5.5M8.75 15.75h3.75"/></svg>
+        </span>
+        <span class="premium-brand-name">CV<span>Forge</span></span>
+      </div>
+      <span class="premium-topbar-divider" aria-hidden="true"></span>
+      <span class="premium-crumb">CV Studio</span>
+      <div class="premium-topbar-end">
+        <span class="premium-autosave"><span class="premium-autosave-dot" aria-hidden="true"></span><span class="premium-autosave-text">All changes saved</span></span>
+        <span class="premium-avatar" aria-hidden="true">AL</span>
+      </div>
+    </header>
+
+    <main class="premium-stage">
+      <div class="premium-intro">
+        <p class="premium-eyebrow">01 — CV Studio</p>
+        <h1 class="premium-title">A resume that feels like <span class="premium-title-accent">you.</span></h1>
+        <p class="premium-lede">Shape the details on the left and watch a print-ready page take form on the right. Your draft stays local until you export it.</p>
+        <div class="premium-meta">
+          <span class="premium-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 5.5 6v5.2c0 4.2 2.8 7.8 6.5 9.3 3.7-1.5 6.5-5.1 6.5-9.3V6L12 3.5Z"/><path d="m9.2 12.1 2 2 3.6-4"/></svg><span>ATS-ready</span></span>
+          <span class="premium-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5h6.7L18 7.8v12.7H7z"/><path d="M13.6 3.7v4.2H18"/></svg><span>A4 · PDF</span></span>
+          <span class="premium-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.2"/><path d="m8.6 12.2 2.3 2.3 4.6-5"/></svg><span>Autosaved locally</span></span>
+        </div>
+      </div>
+
+      <div class="premium-grid">
+        <!-- ============ FORM SECTION ============ -->
+        <section class="premium-card premium-form-card" aria-labelledby="profile-title">
+          <div class="premium-card-head">
+            <div class="premium-card-heading">
+              <span class="premium-step-index" aria-hidden="true">01</span>
+              <div>
+                <h2 id="profile-title">Profile details</h2>
+                <p>The first thing a recruiter reads.</p>
+              </div>
+            </div>
+            <span class="premium-step-note">Step 1 of 3</span>
+          </div>
+
+          <div class="premium-form" role="group" aria-label="Profile details">
+            <div class="premium-field">
+              <label class="premium-label" for="full-name">Full name</label>
+              <input class="premium-input" id="full-name" name="fullName" type="text" value="Ada Lovelace" autocomplete="name">
+            </div>
+            <div class="premium-field">
+              <label class="premium-label" for="target-role">Target role</label>
+              <input class="premium-input" id="target-role" name="targetRole" type="text" value="Product Designer" autocomplete="organization-title">
+            </div>
+            <div class="premium-field">
+              <label class="premium-label" for="email">Email</label>
+              <input class="premium-input" id="email" name="email" type="email" value="ada@analytical.engine" autocomplete="email" spellcheck="false">
+            </div>
+            <div class="premium-field">
+              <label class="premium-label" for="location">Location</label>
+              <input class="premium-input" id="location" name="location" type="text" value="London, United Kingdom" autocomplete="address-level2">
+            </div>
+            <div class="premium-field premium-field--full">
+              <div class="premium-label">
+                <label for="summary">Professional summary</label>
+                <span class="premium-optional">2–3 sentences</span>
+              </div>
+              <textarea class="premium-input premium-textarea" id="summary" name="summary" rows="3">Product designer with 8+ years shaping calm, high-contrast interfaces for data-heavy teams. I pair systems thinking with a stubborn care for the last 5%.</textarea>
+            </div>
+          </div>
+
+          <div class="premium-card-foot">
+            <span class="premium-safe">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg>
+              <span>Saved on this device</span>
+            </span>
+            <div class="premium-actions">
+              <button class="premium-button premium-button--ghost" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m11 6-6 6 6 6"/></svg>
+                <span>Back</span>
+              </button>
+              <button class="premium-button premium-button--primary" type="button">
+                <span>Continue</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ LIVE PREVIEW BLOCK ============ -->
+        <aside class="premium-card premium-preview-card" aria-labelledby="preview-title">
+          <div class="premium-preview-head">
+            <h2 class="premium-preview-state" id="preview-title">
+              <span class="premium-live-dot" aria-hidden="true"></span>Live preview
+            </h2>
+            <div class="premium-preview-meta">
+              <span>A4 · 100%</span>
+              <span class="premium-score">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l1.6 4.9 4.9 1.6-4.9 1.6L12 17l-1.6-4.9-4.9-1.6 4.9-1.6Z"/></svg>
+                ATS 96
+              </span>
+            </div>
+          </div>
+
+          <figure class="premium-sheet" aria-label="Resume preview for Ada Lovelace">
+            <div class="premium-sheet-inner">
+              <p class="premium-cv-name">Ada Lovelace</p>
+              <p class="premium-cv-role">Product Designer</p>
+              <p class="premium-cv-contact">ada@analytical.engine · London, UK · ada.design</p>
+              <div class="premium-cv-rule" aria-hidden="true"></div>
+
+              <section class="premium-cv-section">
+                <p class="premium-cv-label">Profile</p>
+                <p class="premium-cv-copy">Product designer with 8+ years shaping calm, high-contrast interfaces for data-heavy teams. I pair systems thinking with a stubborn care for the last 5%.</p>
+              </section>
+
+              <section class="premium-cv-section">
+                <p class="premium-cv-label">Experience</p>
+                <div class="premium-cv-entries">
+                  <div>
+                    <div class="premium-cv-role-line">
+                      <p class="premium-cv-job">Senior Product Designer</p>
+                      <span class="premium-cv-date">2022 — Now</span>
+                    </div>
+                    <p class="premium-cv-company">Northwind Labs</p>
+                    <p class="premium-cv-desc">Led the observability redesign; time-to-insight fell 38%.</p>
+                  </div>
+                  <div>
+                    <div class="premium-cv-role-line">
+                      <p class="premium-cv-job">Product Designer</p>
+                      <span class="premium-cv-date">2019 — 2022</span>
+                    </div>
+                    <p class="premium-cv-company">Fieldnote</p>
+                    <p class="premium-cv-desc">Built the design system behind a 4.9-star field app.</p>
+                  </div>
+                </div>
+              </section>
+
+              <section class="premium-cv-section">
+                <p class="premium-cv-label">Education</p>
+                <div class="premium-cv-role-line">
+                  <p class="premium-cv-job">MA, Interaction Design</p>
+                  <span class="premium-cv-date">2015 — 2017</span>
+                </div>
+                <p class="premium-cv-company">Royal College of Art</p>
+              </section>
+
+              <section class="premium-cv-section">
+                <p class="premium-cv-label">Toolkit</p>
+                <div class="premium-cv-skills">
+                  <span class="premium-cv-skill">Design systems</span>
+                  <span class="premium-cv-skill">Prototyping</span>
+                  <span class="premium-cv-skill">Figma</span>
+                  <span class="premium-cv-skill">Accessibility</span>
+                  <span class="premium-cv-skill">Data viz</span>
+                  <span class="premium-cv-skill">Motion</span>
+                </div>
+              </section>
+
+              <footer class="premium-cv-foot">
+                <span>Ada Lovelace · Page 1 of 1</span>
+                <span>Prepared with <strong>CVForge</strong></span>
+              </footer>
+            </div>
+          </figure>
+        </aside>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

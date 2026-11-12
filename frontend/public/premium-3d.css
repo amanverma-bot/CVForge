@@ -1,0 +1,270 @@
+/* ==========================================================================
+   CVForge — Premium 3D / Glass Layer
+   --------------------------------------------------------------------------
+   Isolated visual-only stylesheet. It does not contain JavaScript, change
+   layout geometry, hide content, or touch form/state/API behavior.
+
+   Loaded from index.html as a public asset:
+     <link rel="stylesheet" href="/premium-3d.css">
+
+   Every selector is intentionally more specific than the base utility
+   classes it decorates, so it works regardless of stylesheet load order.
+   ========================================================================== */
+
+:root {
+  --cv3d-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --cv3d-duration: 280ms;
+
+  --cv3d-card-sheen: rgb(255 255 255 / 0.42);
+  --cv3d-highlight: rgb(255 255 255 / 0.72);
+  --cv3d-inset: rgb(15 23 42 / 0.045);
+  --cv3d-shadow-strong: rgb(15 23 42 / 0.24);
+  --cv3d-border: rgb(var(--color-primary-rgb) / 0.14);
+  --cv3d-chrome-bg: rgb(var(--color-card-rgb) / 0.84);
+  --cv3d-chrome-bg-strong: rgb(var(--color-card-rgb) / 0.94);
+  --cv3d-btn-glow: rgb(15 23 42 / 0.26);
+  --cv3d-btn-highlight: rgb(255 255 255 / 0.70);
+  --cv3d-input-sheen: rgb(255 255 255 / 0.50);
+}
+
+.dark {
+  --cv3d-card-sheen: rgb(255 255 255 / 0.055);
+  --cv3d-highlight: rgb(255 255 255 / 0.10);
+  --cv3d-inset: rgb(0 0 0 / 0.28);
+  --cv3d-shadow-strong: rgb(0 0 0 / 0.60);
+  --cv3d-border: rgb(var(--color-primary-rgb) / 0.28);
+  --cv3d-chrome-bg: rgb(var(--color-card-rgb) / 0.78);
+  --cv3d-chrome-bg-strong: rgb(var(--color-card-rgb) / 0.92);
+  --cv3d-btn-glow: rgb(0 0 0 / 0.55);
+  --cv3d-btn-highlight: rgb(255 255 255 / 0.12);
+  --cv3d-input-sheen: rgb(255 255 255 / 0.045);
+}
+
+/* Ambient depth behind the whole app. Background-only: no layout impact. */
+body {
+  background-image:
+    radial-gradient(1100px 620px at 8% -10%, rgb(var(--color-primary-rgb) / 0.075), transparent 62%),
+    radial-gradient(900px 560px at 102% -6%, rgb(var(--color-accent-rgb) / 0.055), transparent 58%);
+  background-repeat: no-repeat;
+}
+
+.dark body {
+  background-image:
+    radial-gradient(1100px 620px at 8% -10%, rgb(var(--color-primary-rgb) / 0.15), transparent 62%),
+    radial-gradient(900px 560px at 102% -6%, rgb(var(--color-accent-rgb) / 0.085), transparent 58%);
+}
+
+/* --------------------------------------------------------------------------
+   App chrome — glass boundaries on the fixed navbar and sidebar
+   -------------------------------------------------------------------------- */
+
+body nav[aria-label="Primary navigation"] {
+  background-color: var(--cv3d-chrome-bg);
+  background-image: linear-gradient(180deg, var(--cv3d-card-sheen), transparent 100%);
+  border-bottom-color: var(--cv3d-border);
+  box-shadow:
+    inset 0 1px 0 var(--cv3d-highlight),
+    0 1px 0 var(--cv3d-inset),
+    0 12px 30px -24px var(--cv3d-shadow-strong);
+  -webkit-backdrop-filter: blur(22px) saturate(1.30);
+  backdrop-filter: blur(22px) saturate(1.30);
+}
+
+body #mobile-navigation {
+  background-color: var(--cv3d-chrome-bg-strong);
+  background-image: linear-gradient(180deg, var(--cv3d-card-sheen), transparent 42%);
+  border-top-color: var(--cv3d-border);
+  box-shadow:
+    inset 0 1px 0 var(--cv3d-highlight),
+    0 18px 40px -30px var(--cv3d-shadow-strong);
+  -webkit-backdrop-filter: blur(22px) saturate(1.25);
+  backdrop-filter: blur(22px) saturate(1.25);
+}
+
+body aside[class] {
+  background-color: var(--cv3d-chrome-bg);
+  background-image: linear-gradient(180deg, var(--cv3d-card-sheen), transparent 34%);
+  border-right-color: var(--cv3d-border);
+  box-shadow:
+    inset -1px 0 0 var(--cv3d-highlight),
+    14px 0 36px -34px var(--cv3d-shadow-strong);
+  -webkit-backdrop-filter: blur(20px) saturate(1.20);
+  backdrop-filter: blur(20px) saturate(1.20);
+}
+
+body footer[class] {
+  background-image: linear-gradient(180deg, var(--cv3d-card-sheen), transparent 30%);
+  border-top-color: var(--cv3d-border);
+  box-shadow: inset 0 1px 0 var(--cv3d-highlight);
+}
+
+/* --------------------------------------------------------------------------
+   Cards — layered depth without changing size, position, or border variants
+   -------------------------------------------------------------------------- */
+
+body div[class~="bg-card"][class~="border"][class~="rounded-xl"][class~="shadow-sm"] {
+  background-image: linear-gradient(180deg, var(--cv3d-card-sheen), transparent 26%);
+  box-shadow:
+    inset 0 1px 0 var(--cv3d-highlight),
+    inset 0 -1px 0 var(--cv3d-inset),
+    0 1px 2px var(--cv3d-inset),
+    0 14px 30px -24px var(--cv3d-shadow-strong),
+    0 34px 70px -52px var(--cv3d-shadow-strong);
+  transition:
+    box-shadow 320ms var(--cv3d-spring),
+    background-color 320ms var(--cv3d-spring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body div[class~="bg-card"][class~="border"][class~="rounded-xl"][class~="shadow-sm"]:hover {
+    box-shadow:
+      inset 0 1px 0 var(--cv3d-highlight),
+      inset 0 -1px 0 var(--cv3d-inset),
+      0 2px 4px var(--cv3d-inset),
+      0 20px 40px -24px var(--cv3d-shadow-strong),
+      0 46px 88px -56px var(--cv3d-shadow-strong);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Inputs — inset depth and a calm focus glow
+   -------------------------------------------------------------------------- */
+
+body .input {
+  background-image: linear-gradient(180deg, var(--cv3d-input-sheen), transparent 72%);
+  box-shadow:
+    inset 0 1px 2px var(--cv3d-inset),
+    0 1px 0 var(--cv3d-highlight);
+  transition:
+    box-shadow 220ms var(--cv3d-spring),
+    background-color 180ms ease;
+}
+
+/* Preserve icon clearance from the Input component at every breakpoint. */
+body .input.pl-11 {
+  padding-left: 2.75rem;
+}
+
+body .input.pr-11 {
+  padding-right: 2.75rem;
+}
+
+body .input:not([class~="border-destructive"]):focus {
+  box-shadow:
+    0 0 0 3px rgb(var(--color-primary-rgb) / 0.14),
+    0 10px 22px -18px rgb(var(--color-primary-rgb) / 0.45),
+    inset 0 1px 2px var(--cv3d-inset);
+}
+
+body .input[class~="border-destructive"]:focus {
+  box-shadow:
+    0 0 0 3px rgb(var(--color-destructive-rgb) / 0.14),
+    0 10px 22px -18px rgb(var(--color-destructive-rgb) / 0.40),
+    inset 0 1px 2px var(--cv3d-inset);
+}
+
+/* --------------------------------------------------------------------------
+   Buttons — spring lift on hover, tactile press on click
+   -------------------------------------------------------------------------- */
+
+body :is(button, a)[class~="inline-flex"][class~="rounded-md"] {
+  transform-origin: center;
+  box-shadow:
+    inset 0 1px 0 var(--cv3d-btn-highlight),
+    0 1px 2px var(--cv3d-inset),
+    0 10px 20px -16px var(--cv3d-btn-glow);
+  transition:
+    transform 220ms var(--cv3d-spring),
+    box-shadow 220ms var(--cv3d-spring),
+    background-color 180ms ease,
+    border-color 180ms ease,
+    filter 180ms ease;
+}
+
+body :is(button, a)[class~="inline-flex"][class~="rounded-md"]:is(
+  [class~="bg-primary"],
+  [class~="bg-secondary"],
+  [class~="bg-accent"],
+  [class~="bg-destructive"]
+) {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.16), transparent 54%);
+  box-shadow:
+    inset 0 1px 0 var(--cv3d-btn-highlight),
+    inset 0 -1px 0 var(--cv3d-inset),
+    0 2px 4px var(--cv3d-inset),
+    0 12px 24px -16px var(--cv3d-btn-glow);
+}
+
+body :is(button, a)[class~="inline-flex"][class~="rounded-md"][class~="bg-primary"] {
+  --cv3d-btn-glow: rgb(var(--color-primary-rgb) / 0.48);
+}
+
+body :is(button, a)[class~="inline-flex"][class~="rounded-md"][class~="bg-secondary"] {
+  --cv3d-btn-glow: rgb(var(--color-secondary-rgb) / 0.44);
+}
+
+body :is(button, a)[class~="inline-flex"][class~="rounded-md"][class~="bg-accent"] {
+  --cv3d-btn-glow: rgb(var(--color-accent-rgb) / 0.42);
+}
+
+body :is(button, a)[class~="inline-flex"][class~="rounded-md"][class~="bg-destructive"] {
+  --cv3d-btn-glow: rgb(var(--color-destructive-rgb) / 0.42);
+}
+
+body :is(button, a)[class~="inline-flex"][class~="rounded-md"]:focus-visible {
+  box-shadow:
+    0 0 0 3px rgb(var(--color-primary-rgb) / 0.20),
+    0 14px 28px -18px var(--cv3d-btn-glow),
+    inset 0 1px 0 var(--cv3d-btn-highlight);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body :is(button, a)[class~="inline-flex"][class~="rounded-md"]:not(:disabled):not([aria-disabled="true"]):hover {
+    transform: translateY(-1px) scale(1.01);
+    box-shadow:
+      inset 0 1px 0 var(--cv3d-btn-highlight),
+      0 2px 5px var(--cv3d-inset),
+      0 18px 32px -18px var(--cv3d-btn-glow);
+    filter: brightness(1.02);
+  }
+}
+
+body :is(button, a)[class~="inline-flex"][class~="rounded-md"]:not(:disabled):not([aria-disabled="true"]):active {
+  transform: translateY(1px) scale(0.97);
+  transition-duration: 80ms;
+  box-shadow:
+    inset 0 2px 4px var(--cv3d-inset),
+    0 3px 6px -4px var(--cv3d-btn-glow);
+  filter: brightness(0.99);
+}
+
+/* --------------------------------------------------------------------------
+   Accessibility fallbacks
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  body nav[aria-label="Primary navigation"],
+  body #mobile-navigation,
+  body aside[class],
+  body footer[class],
+  body div[class~="bg-card"][class~="border"][class~="rounded-xl"][class~="shadow-sm"],
+  body .input,
+  body :is(button, a)[class~="inline-flex"][class~="rounded-md"] {
+    transition-duration: 0.01ms;
+  }
+
+  body :is(button, a)[class~="inline-flex"][class~="rounded-md"]:hover,
+  body :is(button, a)[class~="inline-flex"][class~="rounded-md"]:active {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  body nav[aria-label="Primary navigation"],
+  body #mobile-navigation,
+  body aside[class] {
+    background-color: rgb(var(--color-card-rgb) / 0.98);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

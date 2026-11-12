@@ -1,7 +1,7 @@
 # CVForge Security
 
 Security review + controls map for CVForge (Express + MongoDB-ready + React SPA).
-Every item below is implemented in code and covered by `backend/tests/api.test.js` where testable.
+Every item below is implemented in code and covered by the API/OAuth test suites where testable.
 
 ## Quick audit summary
 
@@ -24,6 +24,8 @@ Every item below is implemented in code and covered by `backend/tests/api.test.j
 | 15 | Vulnerable packages updated | ✅ | multer 2.x, Zod 4, unused `openai`/`puppeteer` removed — `npm audit` = 0 |
 | 16 | File upload checks | ✅ | Extension allow-list + magic-byte verification + 5MB cap, memory-only |
 | 17 | Security headers | ✅ | helmet: strict CSP, HSTS, nosniff, frame-deny, referrer-policy |
+| 18 | OAuth CSRF and safe linking | ✅ | signed per-provider state cookies, Google PKCE, verified-email-only linking, short-lived HttpOnly session exchange |
+| 19 | Firebase Google sign-in | ✅ | `backend/lib/firebaseAdmin.js` + `backend/lib/firebaseAuth.js` — signed ID-token verification, fixed project/issuer/provider checks, verified-email-only linking, no Admin secret in the SPA |
 
 ## Public (unauthenticated) endpoints — the complete list
 
@@ -33,6 +35,10 @@ Everything else requires `Authorization: Bearer <JWT>`.
 - `GET /api/captcha` — issues a one-time captcha
 - `POST /api/auth/register` — captcha + rate limited
 - `POST /api/auth/login` — rate limited, uniform error messages
+- `GET /api/auth/google`, `GET /api/auth/github` — OAuth start, no-store redirect
+- `GET /api/auth/google/callback`, `GET /api/auth/github/callback` — state-checked provider callbacks
+- `POST /api/auth/oauth/session` — rate limited exchange of the short-lived HttpOnly OAuth cookie
+- `POST /api/auth/firebase` — rate limited Firebase ID-token exchange (`503` when Firebase is unconfigured)
 - `GET /api/demo` — demo data, offline scoring
 - `GET /api/share/:token` — public share read (random 96-bit token, revocable)
 - `GET /api/docs`, `GET /api/openapi.json` — API docs
@@ -42,8 +48,22 @@ Everything else requires `Authorization: Bearer <JWT>`.
 - **IDOR**: all `:id` routes call store functions scoped by the JWT user id. A foreign id
   yields `404` (not `403`) so object existence is not enumerable. Guarded by tests
   covering CVs, share links, history references and applications.
-- **JWT**: 7-day expiry, `issuer: cvforge`, secret validated at boot. Production refuses
-  to start with the dev default or any secret < 32 chars.
+- **JWT**: 7-day app sessions, `issuer: cvforge`, secret validated at boot. Production
+  refuses to start with the dev default or any secret < 32 chars.
+- **OAuth**: per-provider signed state cookies with `SameSite=Lax`, Google PKCE S256,
+  exact callback/state matching, no provider token in browser URLs, and only verified
+  provider email addresses may link to an existing account. The 2-minute HttpOnly
+  session cookie is path-scoped to `/api/auth`, cleared after exchange, and `Secure`
+  in production; account-link conflicts are rejected rather than overwritten.
+- **Firebase**: the browser obtains a Google ID token with the public Web App config;
+  the backend verifies it with Firebase Admin (`verifyIdToken` with revocation checks),
+  requires project `cvforge-ca97c`, the Firebase issuer, a UID, and
+  `sign_in_provider=google.com`, and only links to an existing account when Google
+  reports a verified email. Ambiguous email ownership returns `409 account_conflict`;
+  malformed/expired/wrong-project tokens return `401`; unconfigured Firebase returns
+  `503`. The Admin service-account JSON must be outside the repo with mode `600` inside
+  a directory with mode `700`, is read lazily, and is never exposed to the browser. CVForge continues to issue its own
+  7-day JWT; no Firebase refresh token is stored server-side.
 - **Passwords**: bcryptjs cost 12; min length 8; login errors are uniform.
 - **Uploads**: memory storage only; `.pdf/.docx/.txt/.md` extension allow-list; magic-byte
   verification (`%PDF-`, `PK\x03\x04`, NUL-byte rejection for text); 5MB/2-file caps.

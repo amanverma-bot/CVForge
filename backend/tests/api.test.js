@@ -1,9 +1,13 @@
 // Integration + security tests (supertest against the real Express app, memory store).
 // Covers: auth on every route, captcha flow, IDOR ownership, validation, upload sniffing,
 // CORS lockdown, security headers, JSON error shapes.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
+import { createRequire } from "node:module";
 import app from "../app.js";
+
+const require = createRequire(import.meta.url);
+const parser = require("../services/parserService.js");
 
 const api = request(app);
 const uniq = () => Math.random().toString(36).slice(2, 8);
@@ -21,22 +25,29 @@ function solve(question) {
 
 async function register(name, password = "Passw0rd!123") {
   const cap = await freshCaptcha();
-  return api.post("/api/auth/register").send({ name, password, captcha_token: cap.token, captcha_answer: solve(cap.question) });
+  return api.post("/api/auth/register").send({ name, email: `${name}@example.com`, password, confirm_password: password, captcha_token: cap.token, captcha_answer: solve(cap.question) });
 }
 
 describe("System & headers", () => {
-  it("GET /api/health is public and reports booleans only", async () => {
+  it("GET /api/health is public and reports actual provider status", async () => {
     const res = await api.get("/api/health");
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(typeof res.body.mongo).toBe("boolean");
     expect(typeof res.body.llm).toBe("boolean");
+    expect(res.body.ai.active).toBe("offline");
+    expect(res.body.llm).toBe(false);
+    expect(res.body.ai.providers.openai.configured).toBe(false);
+    expect(res.body.ai.providers.local.configured).toBe(false);
   });
 
   it("sends hardened security headers and hides x-powered-by", async () => {
     const res = await api.get("/api/health");
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(res.headers["content-security-policy"]).toContain("default-src 'self'");
+    expect(res.headers["content-security-policy"]).toContain("https://identitytoolkit.googleapis.com");
+    expect(res.headers["content-security-policy"]).toContain("frame-src 'self' https://accounts.google.com");
+    expect(res.headers["cross-origin-opener-policy"]).toBe("same-origin-allow-popups");
     expect(res.headers["x-frame-options"]).toBe("DENY");
     expect(res.headers["x-powered-by"]).toBeUndefined();
   });
@@ -77,14 +88,16 @@ describe("System & headers", () => {
 describe("Auth: captcha, register, login", () => {
   it("register is rejected without a valid captcha", async () => {
     const cap = await freshCaptcha();
-    const res = await api.post("/api/auth/register").send({ name: `u${uniq()}`, password: "Passw0rd!123", captcha_token: cap.token, captcha_answer: solve(cap.question) + 1 });
+    const n = `u${uniq()}`;
+    const res = await api.post("/api/auth/register").send({ name: n, email: `${n}@example.com`, password: "Passw0rd!123", confirm_password: "Passw0rd!123", captcha_token: cap.token, captcha_answer: solve(cap.question) + 1 });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/captcha/i);
   });
 
   it("captcha tokens are single-use", async () => {
     const cap = await freshCaptcha();
-    const body = { name: `u${uniq()}`, password: "Passw0rd!123", captcha_token: cap.token, captcha_answer: solve(cap.question) };
+    const n = `u${uniq()}`;
+    const body = { name: n, email: `${n}@example.com`, password: "Passw0rd!123", confirm_password: "Passw0rd!123", captcha_token: cap.token, captcha_answer: solve(cap.question) };
     const first = await api.post("/api/auth/register").send(body);
     expect(first.status).toBe(201);
     const second = await api.post("/api/auth/register").send({ ...body, name: `u${uniq()}` });
@@ -93,7 +106,8 @@ describe("Auth: captcha, register, login", () => {
 
   it("enforces password policy with detailed validation errors", async () => {
     const cap = await freshCaptcha();
-    const res = await api.post("/api/auth/register").send({ name: `u${uniq()}`, password: "short", captcha_token: cap.token, captcha_answer: solve(cap.question) });
+    const n = `u${uniq()}`;
+    const res = await api.post("/api/auth/register").send({ name: n, email: `${n}@example.com`, password: "short", confirm_password: "short", captcha_token: cap.token, captcha_answer: solve(cap.question) });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Validation failed");
     expect(res.body.details.some((d) => d.path === "password")).toBe(true);
@@ -120,6 +134,38 @@ describe("Auth: captcha, register, login", () => {
     const name = `dup${uniq()}`;
     expect((await register(name)).status).toBe(201);
     expect((await register(name)).status).toBe(409);
+  });
+
+  it("server-side logout revokes previously issued JWTs", async () => {
+    const name = `out${uniq()}`;
+    const reg = await register(name);
+    expect(reg.status).toBe(201);
+    const token = reg.body.token;
+
+    expect((await api.get("/api/auth/me").set("Authorization", `Bearer ${token}`)).status).toBe(200);
+    expect((await api.post("/api/auth/logout").set("Authorization", `Bearer ${token}`)).status).toBe(204);
+    expect((await api.get("/api/auth/me").set("Authorization", `Bearer ${token}`)).status).toBe(401);
+
+    // Password login after logout issues a token with the new version.
+    const login = await api.post("/api/auth/login").send({ name, password: "Passw0rd!123" });
+    expect(login.status).toBe(200);
+    expect((await api.get("/api/auth/me").set("Authorization", `Bearer ${login.body.token}`)).status).toBe(200);
+  });
+
+  it("logout requires authentication", async () => {
+    expect((await api.post("/api/auth/logout")).status).toBe(401);
+  });
+
+  it("rejects expired JWTs", async () => {
+    const jwt = require("jsonwebtoken");
+    const expired = jwt.sign(
+      { id: "expired-user", name: "expired", role: "free", ver: 0 },
+      process.env.JWT_SECRET,
+      { expiresIn: -1, issuer: "cvforge", subject: "expired-user" }
+    );
+    const res = await api.get("/api/auth/me").set("Authorization", `Bearer ${expired}`);
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/invalid or expired/i);
   });
 });
 
@@ -335,5 +381,118 @@ describe("SSRF guard on JD URL import", () => {
   ])("blocks %s", async (url) => {
     const { fetchJDFromURL } = await import("../services/parserService.js");
     expect(await fetchJDFromURL(url, 2000)).toBe("");
+  });
+});
+
+describe("JD URL import endpoint", () => {
+  it("requires authentication", async () => {
+    const res = await api.post("/api/jd-import").send({ url: "https://jobs.example.com/role" });
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects an invalid URL", async () => {
+    const reg = await register(`jdi${uniq()}`);
+    const res = await api
+      .post("/api/jd-import")
+      .set("Authorization", `Bearer ${reg.body.token}`)
+      .send({ url: "not-a-url" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Validation failed");
+  });
+
+  it("blocks private and loopback URLs without fetching", async () => {
+    const reg = await register(`jdp${uniq()}`);
+    const res = await api
+      .post("/api/jd-import")
+      .set("Authorization", `Bearer ${reg.body.token}`)
+      .send({ url: "http://127.0.0.1/private-jd" });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toMatch(/could not import/i);
+  });
+
+  it("returns extracted JD text from a public URL", async () => {
+    const reg = await register(`jds${uniq()}`);
+    const spy = vi.spyOn(parser, "fetchJDFromURL").mockResolvedValue(
+      "We are hiring a Python engineer with Flask, SQL, and Docker experience."
+    );
+    try {
+      const res = await api
+        .post("/api/jd-import")
+        .set("Authorization", `Bearer ${reg.body.token}`)
+        .send({ url: "https://jobs.example.com/python-engineer" });
+      expect(res.status).toBe(200);
+      expect(res.body.text).toMatch(/Python engineer/);
+      expect(res.body.length).toBeGreaterThan(30);
+      expect(spy).toHaveBeenCalledWith("https://jobs.example.com/python-engineer");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe("PDF/DOCX upload extraction (regression)", () => {
+  async function makePdf(text = "John Doe Python Developer") {
+    const { PDFDocument, StandardFonts } = await import("pdf-lib");
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage();
+    if (text) {
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
+      page.drawText(text, { x: 50, y: 700, size: 14, font });
+    }
+    return Buffer.from(await pdf.save());
+  }
+
+  async function makeDocx(text = "Jane Doe TypeScript Engineer") {
+    const { Document, Packer, Paragraph, TextRun } = await import("docx");
+    const doc = new Document({
+      sections: [{ children: [new Paragraph({ children: [new TextRun(text)] })] }],
+    });
+    return Buffer.from(await Packer.toBuffer(doc));
+  }
+
+  it("extracts text from a real PDF through /api/analyze", async () => {
+    const reg = await register(`pdf${uniq()}`);
+    const res = await api
+      .post("/api/analyze")
+      .set("Authorization", `Bearer ${reg.body.token}`)
+      .attach("cv_file", await makePdf(), "cv.pdf")
+      .field("jd_text", "Python developer with REST API, React and SQL experience required.");
+    expect(res.status).toBe(200);
+    expect(res.body.scores.overall).toBeGreaterThanOrEqual(0);
+  });
+
+  it("extracts text from a real DOCX through /api/analyze", async () => {
+    const reg = await register(`docx${uniq()}`);
+    const res = await api
+      .post("/api/analyze")
+      .set("Authorization", `Bearer ${reg.body.token}`)
+      .attach("cv_file", await makeDocx(), "cv.docx")
+      .field("jd_text", "TypeScript engineer with React, Node.js and SQL experience.");
+    expect(res.status).toBe(200);
+    expect(res.body.scores.overall).toBeGreaterThanOrEqual(0);
+  });
+
+  it("rejects an empty/scanned PDF with a clean 422", async () => {
+    const reg = await register(`scan${uniq()}`);
+    const res = await api
+      .post("/api/analyze")
+      .set("Authorization", `Bearer ${reg.body.token}`)
+      .attach("cv_file", await makePdf(""), "scanned.pdf")
+      .field("jd_text", "Any job description that is long enough to pass validation.");
+    expect(res.status).toBe(422);
+    expect(res.body.error).toMatch(/no readable text/i);
+  });
+});
+
+describe("Upload error contract", () => {
+  it("maps an unexpected multipart field to 400 rather than 500", async () => {
+    const reg = await register(`extra${uniq()}`);
+    const res = await api
+      .post("/api/analyze")
+      .set("Authorization", `Bearer ${reg.body.token}`)
+      .attach("wrong_field", Buffer.from("hello"), "notes.txt")
+      .field("jd_text", "A sufficiently long job description for validation purposes.");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Unexpected file field");
   });
 });

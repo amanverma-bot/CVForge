@@ -1,34 +1,90 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import {
-  Mail,
-  Lock,
-  User,
-  ArrowRight,
-  Sun,
-  Moon,
-} from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Card } from '@/components/ui/Card';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
 import { api, errorMessage } from '@/lib/api';
+import {
+  completeGoogleRedirect,
+  isFirebaseConfigured,
+  signInWithGoogle,
+  signOutFirebase,
+} from '@/lib/firebase';
+import { AuthCard } from '@/components/auth/AuthCard';
+import { LoginForm } from '@/components/auth/LoginForm';
+import { RegisterForm } from '@/components/auth/RegisterForm';
 
-export default function Login() {
-  const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    captchaToken: '',
-    captchaAnswer: '',
-  });
-  const [captcha, setCaptcha] = useState(null);
-  const [errors, setErrors] = useState({});
-  const [busy, setBusy] = useState(false);
-  const { login: storeLogin, theme, setTheme } = useStore();
+const FIREBASE_ERRORS = {
+  'auth/popup-closed-by-user': 'Google sign-in was cancelled. You can try again or use your password.',
+  'auth/cancelled-popup-request': 'Google sign-in was cancelled. You can try again or use your password.',
+  'auth/popup-blocked': 'Your browser blocked the sign-in popup. Please allow popups and try again.',
+  'auth/redirect-cancelled-by-user': 'Google sign-in was cancelled. You can try again or use your password.',
+  'auth/unauthorized-domain': 'This domain is not authorized for Google sign-in. Please contact support.',
+  'auth/operation-not-allowed': 'Google sign-in is not enabled yet. Please use your password.',
+  'auth/invalid-api-key': 'Google sign-in is not configured correctly. Please contact support.',
+  'auth/configuration-not-found': 'Google sign-in is not configured correctly. Please contact support.',
+  'auth/invalid-app-credential': 'Google sign-in is not configured correctly. Please contact support.',
+  'auth/account-exists-with-different-credential': 'That email is already linked to a different sign-in method. Use your password or contact support.',
+  'auth/network-request-failed': 'A network error interrupted sign-in. Please try again.',
+  'auth/too-many-requests': 'Too many sign-in attempts. Please wait a moment and try again.',
+  'auth/web-storage-unsupported': 'Your browser does not support secure sign-in storage. Please use your password.',
+};
+
+function firebaseErrorMessage(err) {
+  const code = err && typeof err === 'object' ? err.code : '';
+  if (typeof code === 'string' && code.startsWith('auth/requests-from-referer')) {
+    return 'Google sign-in is blocked for this address. Open CVForge at http://127.0.0.1:5001, or add this domain to the Firebase API key allowlist.';
+  }
+  return FIREBASE_ERRORS[code] || errorMessage(err);
+}
+
+export default function Login({ initialMode = 'login' }) {
+  const [mode, setMode] = useState(initialMode);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.toString();
+  const [oauthBusy, setOauthBusy] = useState(() => searchParams.get('oauth') === 'success');
+  const [providers, setProviders] = useState(null);
+  const [authError, setAuthError] = useState('');
+  const { login: storeLogin } = useStore();
   const navigate = useNavigate();
+  const firebaseRedirectStarted = useRef(false);
+
+  const finishFirebaseLogin = useCallback(async (idToken) => {
+    const data = await api('/api/auth/firebase', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+      skipAuth: true,
+    });
+    if (!data?.token) throw new Error('Sign-in response was incomplete');
+    const user = data.user || {};
+    storeLogin(data.token, {
+      id: user.id || '',
+      name: user.name || 'CVForge user',
+      email: user.email || undefined,
+      avatar: user.avatar || undefined,
+      role: user.role || 'free',
+      createdAt: user.createdAt || new Date().toISOString(),
+    });
+    navigate('/dashboard', { replace: true });
+  }, [navigate, storeLogin]);
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve(api('/api/auth/providers', { skipAuth: true }))
+      .then((data) => {
+        if (active && data?.providers) setProviders(data.providers);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initialMode === 'register') setMode('register');
+    if (initialMode === 'login') setMode('login');
+    setAuthError('');
+  }, [initialMode]);
 
   useEffect(() => {
     if (mode === 'register') {
@@ -36,225 +92,148 @@ export default function Login() {
     }
   }, [mode]);
 
+  useEffect(() => {
+    if (!query) return;
+    const params = new URLSearchParams(query);
+    const oauthStatus = params.get('oauth');
+    const oauthError = params.get('oauth_error');
+    if (!oauthStatus && !oauthError) return;
+
+    const clearQuery = () => setSearchParams({}, { replace: true });
+
+    if (oauthError) {
+      setOauthBusy(false);
+      clearQuery();
+      setAuthError(
+        oauthError === 'invalid_state'
+          ? 'Sign-in session expired or was invalid. Please try again.'
+          : 'Sign-in could not be completed. Please try again.'
+      );
+      return;
+    }
+
+    if (oauthStatus !== 'success') {
+      clearQuery();
+      return;
+    }
+
+    let active = true;
+    setOauthBusy(true);
+    api('/api/auth/oauth/session', { method: 'POST', skipAuth: true })
+      .then((data) => {
+        if (!active) return;
+        if (!data?.token) throw new Error('Sign-in response was incomplete');
+        const user = data.user || {};
+        storeLogin(data.token, {
+          id: user.id || '',
+          name: user.name || data.name || data.username || 'CVForge user',
+          email: user.email || undefined,
+          avatar: user.avatar || undefined,
+          role: user.role || 'free',
+          createdAt: user.createdAt || new Date().toISOString(),
+        });
+        clearQuery();
+        navigate('/dashboard', { replace: true });
+      })
+      .catch((err) => {
+        if (!active) return;
+        setOauthBusy(false);
+        clearQuery();
+        setAuthError(errorMessage(err) || 'Sign-in could not be completed. Please try again.');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [query, setSearchParams, navigate, storeLogin]);
+
+  useEffect(() => {
+    if (firebaseRedirectStarted.current) return;
+    firebaseRedirectStarted.current = true;
+    if (!isFirebaseConfigured()) return;
+
+    completeGoogleRedirect()
+      .then(async (idToken) => {
+        if (!idToken) return;
+        setOauthBusy(true);
+        await finishFirebaseLogin(idToken);
+      })
+      .catch((err) => {
+        setOauthBusy(false);
+        setAuthError(firebaseErrorMessage(err));
+        signOutFirebase();
+      });
+  }, [finishFirebaseLogin]);
+
   const fetchCaptcha = async () => {
     try {
       const data = await api('/api/captcha', { skipAuth: true });
-      setCaptcha(data);
-      setForm((prev) => ({ ...prev, captchaToken: data.token, captchaAnswer: '' }));
+      // Captcha is handled inside RegisterForm
     } catch {
-      setCaptcha(null);
+      // Ignore
     }
   };
 
-  const validate = () => {
-    const newErrors = {};
-    if (!form.name.trim()) newErrors.name = 'Name is required';
-    if (mode === 'register' && !/^\S+@\S+\.\S+$/.test(form.email)) {
-      newErrors.email = 'Invalid email';
-    }
-    if (form.password.length < 8) newErrors.password = 'Min 8 characters';
-    if (mode === 'register' && !captcha) newErrors.captcha = 'Captcha not loaded';
-    if (mode === 'register' && isNaN(Number(form.captchaAnswer))) {
-      newErrors.captchaAnswer = 'Enter the answer';
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-    setBusy(true);
+  const handleGoogleSignIn = async () => {
+    if (!isFirebaseConfigured()) return;
+    if (providers?.firebase?.configured === false) return;
+    setAuthError('');
+    setGoogleBusy(true);
     try {
-      const body = mode === 'register'
-        ? { name: form.name.trim(), email: form.email.trim(), password: form.password, captcha_token: form.captchaToken, captcha_answer: Number(form.captchaAnswer) }
-        : { name: form.name.trim(), password: form.password };
-      const data = await api(`/api/auth/${mode}`, {
-        method: 'POST',
-        body: JSON.stringify(body),
-        skipAuth: true,
-      });
-      const user = data.user || {};
-      storeLogin(data.token, {
-        id: user.id || '',
-        name: user.name || data.name || data.username || form.name.trim(),
-        email: user.email || form.email || undefined,
-        role: user.role || 'free',
-        createdAt: user.createdAt || new Date().toISOString(),
-      });
-      navigate('/dashboard');
+      const result = await signInWithGoogle();
+      if (result.redirecting) return;
+      await finishFirebaseLogin(result.idToken);
     } catch (err) {
-      setErrors({ submit: errorMessage(err) });
-      if (mode === 'register') fetchCaptcha();
-    } finally {
-      setBusy(false);
+      setGoogleBusy(false);
+      setAuthError(firebaseErrorMessage(err));
+      signOutFirebase();
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12">
-      <div className="max-w-md w-full">
-        {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-on-primary font-bold text-lg mb-4">
-            CV
-            <span className="ml-1">Forge</span>
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">{mode === 'login' ? 'Welcome Back' : 'Create Account'}</h1>
-          <p className="text-muted-foreground mt-2">
-            {mode === 'login' ? 'Sign in to access your CVs and applications.' : 'Join CVForge to build professional resumes.'}
-          </p>
+    <AuthCard
+      title={mode === 'login' ? 'Welcome Back' : 'Create Account'}
+      subtitle={mode === 'login' ? 'Sign in to access your CVs and applications.' : 'Join CVForge to build professional resumes.'}
+    >
+      {authError && (
+        <div
+          role="alert"
+          className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+        >
+          {authError}
         </div>
+      )}
 
-        <Card padding="md" className="shadow-lg border-border">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex gap-2 mb-6">
-              <button
-                type="button"
-                onClick={() => setMode('login')}
-                className={cn(
-                  'flex-1 py-2.5 rounded-lg text-sm font-medium transition-all',
-                  mode === 'login'
-                    ? 'bg-primary text-on-primary shadow-sm'
-                    : 'bg-muted text-muted-foreground hover:bg-muted-hover'
-                )}
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('register')}
-                className={cn(
-                  'flex-1 py-2.5 rounded-lg text-sm font-medium transition-all',
-                  mode === 'register'
-                    ? 'bg-primary text-on-primary shadow-sm'
-                    : 'bg-muted text-muted-foreground hover:bg-muted-hover'
-                )}
-              >
-                Sign Up
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <Input
-                label="Full Name (Login ID)"
-                placeholder="Enter your name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                error={errors.name}
-                leftIcon={<User className="w-4 h-4" />}
-              />
-              {mode === 'register' && (
-                <Input
-                  label="Email (Optional)"
-                  placeholder="you@example.com"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  error={errors.email}
-                  leftIcon={<Mail className="w-4 h-4" />}
-                />
-              )}
-              <Input
-                label="Password"
-                type="password"
-                placeholder="•••••••• (min 8 chars)"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                error={errors.password}
-                leftIcon={<Lock className="w-4 h-4" />}
-              />
-              {mode === 'register' && captcha && (
-                <div className="space-y-2 pt-2">
-                  <label className="text-xs font-semibold text-foreground">Human Check</label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">{captcha.question}</span>
-                    <button
-                      type="button"
-                      onClick={fetchCaptcha}
-                      className="text-xs text-primary underline"
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                  <Input
-                    label="Answer"
-                    placeholder="Number"
-                    type="tel"
-                    value={form.captchaAnswer}
-                    onChange={(e) => setForm({ ...form, captchaAnswer: e.target.value })}
-                    error={errors.captchaAnswer || errors.captcha}
-                    leftIcon={<ArrowRight className="w-4 h-4" />}
-                  />
-                </div>
-              )}
-            </div>
-
-            {errors.submit && (
-              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-                {errors.submit}
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              variant="primary"
-              className="w-full py-3"
-              disabled={busy}
-            >
-              {busy ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Please wait...
-                </>
-              ) : mode === 'login'
-                ? 'Sign In'
-                : 'Create Account'}
-            </Button>
-          </form>
-
-          <div className="mt-6 pt-6 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center mb-4">
-              {mode === 'login'
-                ? "Don't have an account?"
-                : 'Already have an account?'
-              }
-              <button
-                type="button"
-                onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-                className="text-primary font-semibold hover:text-primary-hover ml-1"
-              >
-                {mode === 'login' ? 'Sign Up' : 'Sign In'}
-              </button>
-            </p>
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border"></span>
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <Button variant="outline" size="sm" className="w-full" disabled>
-                GitHub (coming soon)
-              </Button>
-              <Button variant="outline" size="sm" className="w-full" disabled>
-                Google (coming soon)
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        <div className="text-center mt-6">
-          <p className="text-xs text-muted-foreground">
-            Secure login • bcrypt-hashed passwords • 7-day JWT sessions
-          </p>
+      {oauthBusy && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-4 flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 text-primary text-sm"
+        >
+          <svg className="animate-spin h-4 w-4 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Completing sign-in...
         </div>
-      </div>
-    </div>
+      )}
+
+      {mode === 'login' ? (
+        <LoginForm
+          onGoogleSignIn={handleGoogleSignIn}
+          isGoogleConfigured={isFirebaseConfigured()}
+          googleBusy={googleBusy}
+          githubBusy={false}
+          onSwitchToRegister={() => navigate('/signup')}
+        />
+      ) : (
+        <RegisterForm
+          onSwitchToLogin={() => navigate('/login')}
+          isGoogleConfigured={isFirebaseConfigured()}
+          googleBusy={googleBusy}
+          onGoogleSignIn={handleGoogleSignIn}
+        />
+      )}
+    </AuthCard>
   );
 }

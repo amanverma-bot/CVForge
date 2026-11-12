@@ -11,7 +11,7 @@ const variants: Record<string, string> = {
   accent: 'bg-accent text-on-accent',
   muted: 'bg-muted text-muted-foreground',
   destructive: 'bg-destructive text-on-destructive',
-  success: 'bg-success text-on-accent',
+  success: 'bg-accent text-on-accent',
 };
 
 export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
@@ -19,7 +19,7 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
     <span
       ref={ref}
       className={cn(
-        'badge inline-flex items-center rounded-sm px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider',
+        'badge inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider',
         variants[variant],
         className
       )}

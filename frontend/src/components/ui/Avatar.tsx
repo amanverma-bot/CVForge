@@ -11,7 +11,7 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const sizes: Record<string, string> = {
-  sm: 'w-6 h-6 text-xs',
+  sm: 'w-6 h-6 text-[10px]',
   md: 'w-8 h-8 text-sm',
   lg: 'w-10 h-10 text-base',
 };
@@ -23,15 +23,19 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
       <div
         ref={ref}
         className={cn(
-          'avatar flex-shrink-0',
+          'avatar flex-shrink-0 rounded-full',
           sizes[size],
           className
         )}
         {...props}
       >
         {src ? (
-          <img src={src} alt={alt || name || 'avatar'} />
-        ) : fallback || initials}
+          <img src={src} alt={alt || name || 'avatar'} className="w-full h-full object-cover rounded-full" />
+        ) : fallback || (
+          <span className="flex items-center justify-center font-semibold text-foreground">
+            {initials}
+          </span>
+        )}
       </div>
     );
   }

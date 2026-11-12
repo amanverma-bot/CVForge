@@ -374,7 +374,7 @@ function grammarCheck(text) {
   const issues = [];
   const lines = text.split("\n");
   lines.forEach((line, i) => {
-    if (/  /g.test(line)) {
+    if (/ {2}/g.test(line)) {
       issues.push({ line: i + 1, issue: "Double space", fix: "Replace with single space" });
     }
     if (/\b(the the|a a|and and|of of)\b/i.test(line)) {

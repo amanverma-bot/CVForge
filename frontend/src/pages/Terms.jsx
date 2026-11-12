@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 
 export default function Terms() {
   return (
-    <div className="max-w-3xl mx-auto space-y-8 px-4">
+    <div className="max-w-3xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Terms of Service</h1>
@@ -21,7 +21,7 @@ export default function Terms() {
         </div>
       </div>
 
-      <Card padding="lg" className="border-border space-y-6">
+      <Card padding="none" className="border-border space-y-6 p-5 sm:p-8">
         <div className="flex items-center gap-3 mb-2">
           <FileText className="w-5 h-5 text-primary" />
           <h2 className="text-lg font-bold text-foreground">Agreement</h2>
@@ -38,7 +38,7 @@ export default function Terms() {
             <div>
               <h3 className="text-sm font-semibold text-foreground">Honest Use</h3>
               <p className="text-sm text-muted-foreground">
-                CVForge drafts resumes from information you provide. We mark learning skills as "(Familiar)" to encourage honesty. Only claim what is true — you are responsible for final content.
+                CVForge drafts resumes from information you provide. We mark learning skills as &quot;(Familiar)&quot; to encourage honesty. Only claim what is true — you are responsible for final content.
               </p>
             </div>
           </div>
@@ -62,7 +62,7 @@ export default function Terms() {
             <div>
               <h3 className="text-sm font-semibold text-foreground">Fair Use</h3>
               <p className="text-sm text-muted-foreground">
-                5 MB upload limit, rate-limited APIs. Don't abuse shared links or scrape the service. Violations may result in account suspension.
+                5 MB upload limit, rate-limited APIs. Don&apos;t abuse shared links or scrape the service. Violations may result in account suspension.
               </p>
             </div>
           </div>
@@ -74,7 +74,7 @@ export default function Terms() {
             <div>
               <h3 className="text-sm font-semibold text-foreground">Availability</h3>
               <p className="text-sm text-muted-foreground">
-                Demo hosting may sleep or restart, clearing unsaved demo data. Export anything important. We strive for uptime but don't guarantee it for free tier.
+                Demo hosting may sleep or restart, clearing unsaved demo data. Export anything important. We strive for uptime but don&apos;t guarantee it for free tier.
               </p>
             </div>
           </div>

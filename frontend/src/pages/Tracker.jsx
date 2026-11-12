@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { api, errorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
@@ -65,25 +67,68 @@ export default function Tracker() {
       notes: form.notes.trim() || undefined,
       remindAt: form.remindAt || null,
     };
-    try {
-      if (editingId) {
+
+    if (editingId) {
+      // Optimistic edit
+      const previous = applications.find((a) => String(a.id || a._id) === String(editingId));
+      const optimisticUpdated = { ...payload, id: editingId, _id: editingId };
+      setApplications((prev) =>
+        prev.map((a) =>
+          String(a.id || a._id) === String(editingId) ? optimisticUpdated : a
+        )
+      );
+      setEditingId(null);
+      setForm(emptyForm);
+      try {
         const updated = await api(`/api/applications/${editingId}`, {
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
-        setApplications((prev) => prev.map((a) => (String(a.id || a._id) === String(editingId) ? updated : a)));
-      } else {
+        setApplications((prev) =>
+          prev.map((a) =>
+            String(a.id || a._id) === String(editingId) ? { ...a, ...updated } : a
+          )
+        );
+      } catch (err) {
+        // Rollback
+        setApplications((prev) =>
+          prev.map((a) =>
+            String(a.id || a._id) === String(editingId) ? previous : a
+          )
+        );
+        setError(errorMessage(err));
+      } finally {
+        setBusy(false);
+      }
+    } else {
+      // Optimistic create
+      const optimisticId = `temp-${Date.now()}`;
+      const optimisticApp = {
+        ...payload,
+        id: optimisticId,
+        _id: optimisticId,
+        createdAt: new Date().toISOString(),
+        _optimistic: true,
+      };
+      setApplications((prev) => [optimisticApp, ...prev]);
+      setForm(emptyForm);
+      try {
         const created = await api('/api/applications', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        setApplications((prev) => [created, ...prev]);
+        setApplications((prev) =>
+          prev.map((a) =>
+            a._id === optimisticId ? { ...a, ...created, _optimistic: false } : a
+          )
+        );
+      } catch (err) {
+        // Rollback
+        setApplications((prev) => prev.filter((a) => a._id !== optimisticId));
+        setError(errorMessage(err));
+      } finally {
+        setBusy(false);
       }
-      resetForm();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -102,14 +147,46 @@ export default function Tracker() {
 
   const handleDelete = async (app) => {
     if (!confirm(`Delete "${app.title}" from your tracker?`)) return;
+    const appId = app.id || app._id;
+    const previousIndex = applications.findIndex(
+      (a) => String(a.id || a._id) === String(appId)
+    );
+    const previous = applications[previousIndex];
+
+    // Optimistic delete
+    setApplications((prev) =>
+      prev.filter((a) => String(a.id || a._id) !== String(appId))
+    );
+    if (String(editingId) === String(appId)) resetForm();
+
     try {
-      await api(`/api/applications/${app.id || app._id}`, { method: 'DELETE' });
-      setApplications((prev) => prev.filter((a) => String(a.id || a._id) !== String(app.id || app._id)));
-      if (String(editingId) === String(app.id || app._id)) resetForm();
+      await api(`/api/applications/${appId}`, { method: 'DELETE' });
     } catch (err) {
+      // Rollback: insert back at previous position
+      setApplications((prev) =>
+        [...prev.slice(0, previousIndex), previous, ...prev.slice(previousIndex)]
+      );
       setError(errorMessage(err));
     }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Application Tracker</h1>
+            <p className="text-muted-foreground">
+              Track every job application, set reminders, and manage your pipeline.
+            </p>
+          </div>
+        </div>
+        <div className="p-12">
+          <LoadingState message="Loading applications…" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -139,7 +216,7 @@ export default function Tracker() {
             </Button>
           )}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Input
             label="Job Title"
             placeholder="e.g. Senior Frontend Engineer"
@@ -190,7 +267,7 @@ export default function Tracker() {
         </Button>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {STATUSES.map((s) => {
           const count = applications.filter((a) => a.status === s.value).length;
           return (
@@ -210,10 +287,18 @@ export default function Tracker() {
           <h2 className="text-lg font-semibold text-foreground">Your Applications</h2>
         </div>
         <div className="divide-y divide-border">
-          {loading && <div className="p-6 text-sm text-muted-foreground">Loading…</div>}
-          {!loading && applications.length === 0 && (
-            <div className="p-6 text-sm text-muted-foreground">
-              No applications yet — add your first one above.
+          {applications.length === 0 && (
+            <div className="p-6">
+              <EmptyState
+                icon={<Briefcase className="w-8 h-8 text-muted-foreground" />}
+                title="No applications yet"
+                description="Add your first application to start tracking."
+                action={
+                  <Button variant="outline" size="sm" onClick={() => window.scrollTo({ top: 0 })}>
+                    Add Application
+                  </Button>
+                }
+              />
             </div>
           )}
           {applications.map((app) => (
@@ -221,17 +306,17 @@ export default function Tracker() {
               key={app.id || app._id}
               className="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 group hover:bg-muted/50 transition-colors"
             >
-              <div className="flex items-center gap-3 flex-1">
-                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-muted-foreground font-bold text-sm">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground font-bold text-sm">
                   {(app.company || app.title || '?').charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">{app.title}</h3>
-                  <p className="text-xs text-muted-foreground">{app.company || '—'}</p>
-                  {app.notes && <p className="text-xs text-muted-foreground mt-1">{app.notes}</p>}
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-foreground break-words">{app.title}</h3>
+                  <p className="text-xs text-muted-foreground break-words">{app.company || '—'}</p>
+                  {app.notes && <p className="text-xs text-muted-foreground mt-1 break-words">{app.notes}</p>}
                 </div>
               </div>
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex w-full items-center gap-3 flex-wrap md:w-auto">
                 <Badge variant={variantFor(app.status)} className="text-xs">
                   {labelFor(app.status)}
                 </Badge>
@@ -239,16 +324,18 @@ export default function Tracker() {
                   <span className="text-xs text-muted-foreground">Follow up {formatDate(app.remindAt)}</span>
                 )}
                 <span className="text-xs text-muted-foreground">{formatDate(app.createdAt)}</span>
-                <Button variant="outline" size="sm" className="px-3 py-1.5" onClick={() => handleEdit(app)}>
-                  Edit
-                </Button>
-                <button
-                  onClick={() => handleDelete(app)}
-                  className="text-destructive p-1.5 hover:bg-destructive/10 rounded"
-                  aria-label={`Delete ${app.title}`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="ml-auto flex items-center gap-1">
+                  <Button variant="outline" size="sm" className="px-3 py-1.5" onClick={() => handleEdit(app)}>
+                    Edit
+                  </Button>
+                  <button
+                    onClick={() => handleDelete(app)}
+                    className="text-destructive p-1.5 hover:bg-destructive/10 rounded"
+                    aria-label={`Delete ${app.title}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}

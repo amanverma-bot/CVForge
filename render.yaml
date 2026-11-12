@@ -27,5 +27,21 @@ services:
         sync: false # optional: enables LLM interviews/cover letters (offline fallback otherwise)
       - key: ADMIN_PASSWORD
         sync: false # optional: >=12 chars — seeds the admin account (never a default password)
+      - key: FIREBASE_PROJECT_ID
+        value: "" # set to cvforge-ca97c in the Render dashboard before enabling Firebase
+      - key: FIREBASE_SERVICE_ACCOUNT_PATH
+        value: "" # set to mounted Admin JSON path outside repo; parent dir 700, file 600
+      - key: VITE_FIREBASE_API_KEY
+        value: "" # public frontend build value; set in the Render dashboard
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        value: "" # public frontend build value; set in the Render dashboard
+      - key: VITE_FIREBASE_PROJECT_ID
+        value: "" # public frontend build value; set to cvforge-ca97c in the Render dashboard
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        value: "" # public frontend build value; set in the Render dashboard
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        value: "" # public frontend build value; set in the Render dashboard
+      - key: VITE_FIREBASE_APP_ID
+        value: "" # public frontend build value; set in the Render dashboard
       - key: FRONTEND_URL
         value: https://cvforge.onrender.com # update after first deploy if the URL differs

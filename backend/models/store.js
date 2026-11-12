@@ -16,7 +16,12 @@ const userSchema = new Schema(
   {
     name: { type: String, required: true, unique: true, index: true },
     email: { type: String, unique: true, sparse: true },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, default: "" },
+    googleId: { type: String, unique: true, sparse: true },
+    githubId: { type: String, unique: true, sparse: true },
+    firebaseUid: { type: String, unique: true, sparse: true },
+    tokenVersion: { type: Number, default: 0 },
+    avatar: { type: String, maxlength: 500 },
     role: { type: String, default: "free" },
   },
   { timestamps: true }
@@ -87,6 +92,28 @@ const withId = (doc) => {
   return o;
 };
 
+const OAUTH_PROVIDER_FIELDS = Object.freeze({ google: "googleId", github: "githubId", firebase: "firebaseUid" });
+
+function providerField(provider) {
+  const field = OAUTH_PROVIDER_FIELDS[provider];
+  if (!field) throw Object.assign(new Error("Unsupported OAuth provider"), { code: "unsupported_oauth_provider" });
+  return field;
+}
+
+// Public user projection: never expose password hashes or provider identifiers.
+function publicUser(doc) {
+  if (!doc) return null;
+  const o = withId(doc);
+  return {
+    id: o.id,
+    name: o.name,
+    email: o.email || null,
+    avatar: o.avatar || null,
+    role: o.role || "free",
+    createdAt: o.createdAt,
+  };
+}
+
 const newShareToken = () => crypto.randomBytes(8).toString("hex");
 
 // In-memory fallback
@@ -106,6 +133,7 @@ async function connect(mongoUri) {
   try {
     await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 5000,
+      ...(process.env.NODE_ENV === "production" ? { autoIndex: false } : {}),
     });
     isMongo = true;
     console.log("✓ Connected to MongoDB");
@@ -121,31 +149,33 @@ function isMongoConnected() {
 
 // ── User operations ──
 async function createUser({ name, email, passwordHash }) {
+  const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
   if (isMongo) {
-    const existing = await User.findOne({ $or: [{ name }, ...(email ? [{ email }] : [])] });
+    const existing = await User.findOne({ $or: [{ name }, ...(normalizedEmail ? [{ email: normalizedEmail }] : [])] });
     if (existing) throw Object.assign(new Error("Name/email already exists"), { code: 11000 });
-    const user = new User({ name, email, passwordHash });
+    const user = new User({ name, email: normalizedEmail, passwordHash });
     await user.save();
-    return { id: user._id.toString(), name, email, role: "free", createdAt: user.createdAt };
+    return publicUser(user);
   }
   // In-memory
   const existing = memoryStore.users.find(
-    (u) => u.name === name || (email && u.email === email)
+    (u) => u.name === name || (normalizedEmail && u.email === normalizedEmail)
   );
   if (existing) throw Object.assign(new Error("Name/email already exists"), { code: 11000 });
   const id = Math.random().toString(36).slice(2, 11);
-  const user = { id, name, email, passwordHash, role: "free", createdAt: new Date().toISOString() };
+  const user = { id, name, email: normalizedEmail, passwordHash, role: "free", tokenVersion: 0, createdAt: new Date().toISOString() };
   memoryStore.users.push(user);
-  return { id, name, email, role: "free", createdAt: user.createdAt };
+  return publicUser(user);
 }
 
 async function findUser(name) {
   if (isMongo) {
-    const user = await User.findOne({ name });
+    const user = await User.findOne({ name }) || (name.includes('@') ? await User.findOne({ email: name }) : null);
     if (!user) return null;
-    return { id: user._id.toString(), name: user.name, email: user.email, passwordHash: user.passwordHash, role: user.role, createdAt: user.createdAt };
+    return { ...publicUser(user), passwordHash: user.passwordHash || "", tokenVersion: Number(user.tokenVersion || 0) };
   }
-  return memoryStore.users.find((u) => u.name === name) || null;
+  const user = memoryStore.users.find((u) => u.name === name || (name.includes('@') && u.email === name)) || null;
+  return user ? { ...publicUser(user), passwordHash: user.passwordHash || "", tokenVersion: Number(user.tokenVersion || 0) } : null;
 }
 
 async function getUserById(id) {
@@ -153,9 +183,125 @@ async function getUserById(id) {
     if (!oid(id)) return null;
     const user = await User.findById(id);
     if (!user) return null;
-    return { id: user._id.toString(), name: user.name, email: user.email, role: user.role, createdAt: user.createdAt };
+    return { ...publicUser(user), tokenVersion: Number(user.tokenVersion || 0) };
   }
-  return memoryStore.users.find((u) => u.id === id) || null;
+  const user = memoryStore.users.find((u) => u.id === id) || null;
+  return user ? { ...publicUser(user), tokenVersion: Number(user.tokenVersion || 0) } : null;
+}
+
+async function incrementTokenVersion(userId) {
+  if (isMongo) {
+    if (!oid(userId)) return false;
+    const result = await User.updateOne({ _id: userId }, { $inc: { tokenVersion: 1 } });
+    return result.matchedCount > 0;
+  }
+  const user = memoryStore.users.find((u) => u.id === userId);
+  if (!user) return false;
+  user.tokenVersion = Number(user.tokenVersion || 0) + 1;
+  return true;
+}
+
+async function findUserByEmail(email) {
+  if (!email) return null;
+  const needle = String(email).trim().toLowerCase();
+  if (isMongo) {
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const user = await User.findOne({ email: { $regex: `^${escaped}$`, $options: "i" } });
+    return publicUser(user);
+  }
+  const user = memoryStore.users.find((u) => u.email && String(u.email).toLowerCase() === needle) || null;
+  return publicUser(user);
+}
+
+async function findUserByProvider(provider, providerId) {
+  if (!providerId) return null;
+  const field = providerField(provider);
+  const value = String(providerId);
+  if (isMongo) {
+    const user = await User.findOne({ [field]: value });
+    return publicUser(user);
+  }
+  const user = memoryStore.users.find((u) => String(u[field] || "") === value) || null;
+  return publicUser(user);
+}
+
+async function linkOAuthAccount(userId, { provider, providerId, avatar }) {
+  if (!providerId) return null;
+  const field = providerField(provider);
+  const value = String(providerId);
+
+  if (isMongo) {
+    if (!oid(userId)) return null;
+    const [user, other] = await Promise.all([
+      User.findById(userId),
+      User.findOne({ [field]: value }),
+    ]);
+    if (!user) return null;
+    if (other && String(other._id) !== String(user._id)) {
+      throw Object.assign(new Error("OAuth account is already linked"), { code: "oauth_account_conflict" });
+    }
+    const current = user.get(field);
+    if (current && String(current) !== value) {
+      throw Object.assign(new Error("Account is already linked to another provider identity"), { code: "oauth_account_conflict" });
+    }
+    user.set(field, value);
+    if (avatar && !user.avatar) user.avatar = String(avatar).slice(0, 500);
+    await user.save();
+    return publicUser(user);
+  }
+
+  const user = memoryStore.users.find((u) => u.id === userId);
+  if (!user) return null;
+  const other = memoryStore.users.find((u) => u.id !== userId && String(u[field] || "") === value);
+  if (other || (user[field] && String(user[field]) !== value)) {
+    throw Object.assign(new Error("OAuth account is already linked"), { code: "oauth_account_conflict" });
+  }
+  user[field] = value;
+  if (avatar && !user.avatar) user.avatar = String(avatar).slice(0, 500);
+  return publicUser(user);
+}
+
+async function createOAuthUser({ name, email, provider, providerId, avatar }) {
+  const field = providerField(provider);
+  const value = String(providerId);
+  const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
+
+  if (isMongo) {
+    const emailFilter = normalizedEmail
+      ? { email: { $regex: `^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" } }
+      : null;
+    const existing = await User.findOne({
+      $or: [{ name }, { [field]: value }, ...(emailFilter ? [emailFilter] : [])],
+    });
+    if (existing) throw Object.assign(new Error("Name/email/provider already exists"), { code: 11000 });
+    const user = new User({
+      name,
+      email: normalizedEmail,
+      [field]: value,
+      avatar: avatar ? String(avatar).slice(0, 500) : undefined,
+      role: "free",
+    });
+    await user.save();
+    return publicUser(user);
+  }
+
+  const existing = memoryStore.users.find(
+    (u) => u.name === name || String(u[field] || "") === value || (normalizedEmail && u.email && String(u.email).toLowerCase() === normalizedEmail)
+  );
+  if (existing) throw Object.assign(new Error("Name/email/provider already exists"), { code: 11000 });
+  const id = Math.random().toString(36).slice(2, 11);
+  const user = {
+    id,
+    name,
+    email: normalizedEmail,
+    [field]: value,
+    avatar: avatar ? String(avatar).slice(0, 500) : null,
+    role: "free",
+    tokenVersion: 0,
+    createdAt: new Date().toISOString(),
+  };
+  memoryStore.users.push(user);
+  return publicUser(user);
 }
 
 // ── CV operations ──
@@ -317,11 +463,13 @@ async function exportUserData(userId) {
       Application.find({ userId }).lean(),
     ]);
     if (user) delete user.passwordHash;
+    if (user) delete user.tokenVersion;
     return { user, cvs: cvs.map(withId), analyses: analyses.map(withId), applications: apps.map(withId) };
   }
   const found = memoryStore.users.find((u) => u.id === userId);
   const user = found ? { ...found } : null;
   if (user) delete user.passwordHash;
+  if (user) delete user.tokenVersion;
   return {
     user,
     cvs: memoryStore.cvs.filter((c) => c.userId === userId),
@@ -354,6 +502,11 @@ module.exports = {
   createUser,
   findUser,
   getUserById,
+  incrementTokenVersion,
+  findUserByEmail,
+  findUserByProvider,
+  linkOAuthAccount,
+  createOAuthUser,
   createCV,
   listCVs,
   getCV,

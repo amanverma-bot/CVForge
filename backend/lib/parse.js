@@ -1,8 +1,7 @@
 // ── PDF / DOCX / TXT / MD Parser ───────────────────────────────────────────
 // Extracts text from uploaded buffers. Magic-byte verified before parsing.
-const pdf = require("pdf-parse");
+const { PDFParse } = require("pdf-parse");
 const mammoth = require("mammoth");
-
 const { AppError } = require("../middleware/error");
 
 const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt", ".md"];
@@ -49,8 +48,16 @@ async function extractText(buffer, filename = "") {
 
   switch (ext) {
     case ".pdf": {
-      const data = await pdf(buffer);
-      return data.text || "";
+      const parser = new PDFParse({ data: buffer });
+      try {
+        const result = await parser.getText();
+        if (Array.isArray(result.pages)) {
+          return result.pages.map((page) => page.text || "").join("\n\n");
+        }
+        return result.text || "";
+      } finally {
+        await parser.destroy().catch(() => {});
+      }
     }
     case ".docx": {
       const result = await mammoth.extractRawText({ buffer });

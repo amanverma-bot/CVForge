@@ -37,6 +37,8 @@ app.use(express.json({ limit: "1mb" }));
 app.use("/api", globalLimiter);
 
 // ---------- API routes ----------
+app.use("/api/auth", require("./routes/oauth"));
+app.use("/api/auth", require("./routes/firebaseAuth"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/applications", require("./routes/applications"));
 app.use("/api", require("./routes/cvs"));

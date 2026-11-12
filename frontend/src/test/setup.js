@@ -19,6 +19,21 @@ if (typeof globalThis.localStorage === 'undefined') {
   }
 }
 
+if (typeof window.matchMedia === "undefined") {
+  window.matchMedia = (query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener() {},
+    removeListener() {},
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {
+      return false
+    },
+  })
+}
+
 afterEach(() => {
   cleanup()
   try {

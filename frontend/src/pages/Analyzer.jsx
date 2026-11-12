@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -8,6 +8,8 @@ import {
   Search,
   Sparkles,
   ArrowRight,
+  Link2,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -19,7 +21,7 @@ const BAR_COLORS = {
   keyword_match: 'bg-primary',
   semantic_similarity: 'bg-secondary',
   skill_coverage: 'bg-success',
-  ats_compatibility: 'bg-destructive',
+  ats_compatibility: 'bg-primary',
 };
 
 export default function Analyzer() {
@@ -31,17 +33,74 @@ export default function Analyzer() {
   const [downloading, setDownloading] = useState(false);
   const [fresherMode, setFresherMode] = useState(false);
   const [error, setError] = useState('');
+  const [cvFile, setCvFile] = useState(null);
+  const [jdUrl, setJdUrl] = useState('');
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const clearFile = () => {
+    setCvFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFile = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!/\.(pdf|docx|txt|md)$/i.test(file.name)) {
+      setError('Choose a PDF, DOCX, TXT, or MD file.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('CV file must be 5 MB or smaller.');
+      event.target.value = '';
+      return;
+    }
+    setCvFile(file);
+    setError('');
+  };
+
+  const handleImportJD = async () => {
+    if (!jdUrl.trim()) {
+      setError('Enter a job description URL to import.');
+      return;
+    }
+    setImporting(true);
+    setError('');
+    try {
+      const data = await api('/api/jd-import', {
+        method: 'POST',
+        body: JSON.stringify({ url: jdUrl.trim() }),
+      });
+      if (!data?.text?.trim()) throw new Error('That page did not contain readable job description text.');
+      setJdText(data.text.trim());
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleAnalyze = async () => {
-    if (!cvText.trim() || !jdText.trim()) {
-      setError('Please enter both CV text and job description');
+    if ((!cvText.trim() && !cvFile) || !jdText.trim()) {
+      setError('Please provide your CV and a job description');
       return;
     }
     setBusy(true);
     setError('');
     try {
-      const body = { cv_text: cvText, jd_text: jdText, ...(fresherMode ? { mode: 'fresher' } : {}) };
-      const analysis = await api('/api/analyze', { method: 'POST', body: JSON.stringify(body) });
+      let options;
+      if (cvFile) {
+        const form = new FormData();
+        form.append('cv_file', cvFile);
+        form.append('jd_text', jdText);
+        if (fresherMode) form.append('mode', 'fresher');
+        options = { method: 'POST', body: form };
+      } else {
+        const body = { cv_text: cvText, jd_text: jdText, ...(fresherMode ? { mode: 'fresher' } : {}) };
+        options = { method: 'POST', body: JSON.stringify(body) };
+      }
+      const analysis = await api('/api/analyze', options);
       const scores = analysis.scores || {};
       setResults({
         overall: Number(scores.overall) || 0,
@@ -55,8 +114,9 @@ export default function Analyzer() {
         missing: analysis.skills?.missing || analysis.detailed?.keywords?.missing || [],
         suggestions: analysis.detailed?.suggestions || [],
       });
-      // Persist to history without blocking the result view.
-      api('/api/history', { method: 'POST', body: JSON.stringify({ cv_text: cvText, jd_text: jdText }) }).catch(() => {});
+      if (!cvFile) {
+        api('/api/history', { method: 'POST', body: JSON.stringify({ cv_text: cvText, jd_text: jdText }) }).catch(() => {});
+      }
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -128,15 +188,55 @@ export default function Analyzer() {
                 <h3 className="text-sm font-semibold text-foreground">Your CV / Resume</h3>
               </div>
               <textarea
-                placeholder="Paste your CV text here..."
+                aria-label="CV text"
+                placeholder="Paste your CV text here, or upload a file below..."
                 value={cvText}
                 onChange={(e) => setCvText(e.target.value)}
-                className="input w-full h-64 resize-y"
+                className="input w-full h-56 resize-y"
               />
-              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                <Upload className="w-4 h-4" />
-                Paste text — file upload is available through the REST API.
-              </label>
+              <div className="space-y-2">
+                <input
+                  ref={fileInputRef}
+                  id="cv-file-upload"
+                  type="file"
+                  aria-label="Upload CV file"
+                  accept=".pdf,.docx,.txt,.md"
+                  onChange={handleFile}
+                  className="sr-only"
+                />
+                {cvFile ? (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
+                      <FileText className="w-4 h-4 shrink-0 text-primary" />
+                      <span className="truncate">{cvFile.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {(cvFile.size / 1024).toFixed(0)} KB
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={clearFile}
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label="Remove selected CV file"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label
+                    htmlFor="cv-file-upload"
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Upload CV (PDF, DOCX, TXT, MD)
+                  </label>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {cvFile
+                    ? 'The uploaded file will be used instead of the pasted text.'
+                    : 'Text-based files up to 5 MB. A selected file takes precedence over pasted text.'}
+                </p>
+              </div>
             </div>
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -144,20 +244,42 @@ export default function Analyzer() {
                 <h3 className="text-sm font-semibold text-foreground">Job Description</h3>
               </div>
               <textarea
-                placeholder="Paste the job description here..."
+                aria-label="Job description text"
+                placeholder="Paste the job description here, or import it from a public URL..."
                 value={jdText}
                 onChange={(e) => setJdText(e.target.value)}
-                className="input w-full h-64 resize-y"
+                className="input w-full h-56 resize-y"
               />
-              <div className="flex gap-2">
-                <input
-                  className="input w-full flex-1 opacity-60"
-                  placeholder="JD URL import is not available in this version"
-                  disabled
-                />
-                <Button variant="outline" size="sm" disabled>
-                  Import
-                </Button>
+              <div className="space-y-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    aria-label="Job description URL"
+                    type="url"
+                    className="input w-full min-w-0 sm:flex-1"
+                    placeholder="https://company.com/jobs/role"
+                    value={jdUrl}
+                    onChange={(e) => setJdUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleImportJD();
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleImportJD}
+                    disabled={importing || !jdUrl.trim()}
+                    className="w-full sm:w-auto"
+                  >
+                    <Link2 className="w-4 h-4 mr-1" />
+                    {importing ? 'Importing...' : 'Import'}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Public job-posting URLs only. Imported text replaces the job description above.
+                </p>
               </div>
             </div>
           </div>
@@ -166,7 +288,7 @@ export default function Analyzer() {
               variant="primary"
               onClick={handleAnalyze}
               className="w-full py-3"
-              disabled={busy || !cvText.trim() || !jdText.trim()}
+              disabled={busy || (!cvText.trim() && !cvFile) || !jdText.trim()}
             >
               {busy ? (
                 <span className="flex items-center gap-2">
@@ -203,7 +325,7 @@ export default function Analyzer() {
             Your CV scored <span className="font-semibold">{results.overall}/100</span> against the job description.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:justify-end">
           <Button variant="outline" onClick={() => setResults(null)}>
             Run Another
           </Button>

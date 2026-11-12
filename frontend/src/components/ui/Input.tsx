@@ -11,13 +11,14 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, error, helperText, leftIcon, rightIcon, id, ...props }, ref) => {
-    const inputId = id || props.name;
+    const generatedId = React.useId();
+    const inputId = id || props.name || generatedId;
     return (
-      <div className="space-y-1" style={{ display: 'contents' }}>
+      <div className="space-y-1">
         {label && (
           <label
             htmlFor={inputId}
-            className="text-sm font-semibold text-foreground mb-1 block"
+            className="block text-sm font-semibold text-foreground"
           >
             {label}
           </label>
@@ -32,9 +33,10 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             className={cn(
-              'input w-full pl-10',
-              leftIcon && 'pl-9',
-              error && 'border-destructive focus:border-destructive focus:ring-destructive',
+              'input w-full',
+              leftIcon && 'pl-11',
+              rightIcon && 'pr-11',
+              error && 'border-destructive focus:border-destructive',
               className
             )}
             {...props}
@@ -46,12 +48,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           )}
         </div>
         {error && (
-          <p className="text-sm text-destructive" style={{ display: 'contents' }}>
+          <p className="mt-1 text-sm text-destructive">
             {error}
           </p>
         )}
         {helperText && !error && (
-          <p className="text-sm text-muted-foreground" style={{ display: 'contents' }}>
+          <p className="mt-1 text-sm text-muted-foreground">
             {helperText}
           </p>
         )}

@@ -9,10 +9,9 @@ import {
   ShieldCheck,
   Clock,
   Rocket,
-  Users,
-  DollarSign,
   Sparkles,
   Layers,
+  Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -28,7 +27,7 @@ const features = [
   {
     icon: FileText,
     title: 'Smart Resume Builder',
-    description: 'Guided builder with live A4 preview, auto-save, and 10+ professional templates tailored for your industry.',
+    description: 'Guided builder with live A4 preview, auto-save, and professional templates tailored for your industry.',
   },
   {
     icon: BarChart3,
@@ -115,7 +114,7 @@ const testimonials = [
     name: 'Sarah Chen',
     role: 'Software Engineer',
     company: 'TechCorp',
-    avatar: 'SC',
+    initials: 'SC',
     content: 'CVForge helped me tailor my resume for each job application. I went from 0 interviews to 5 in just 2 weeks.',
     rating: 5,
   },
@@ -123,7 +122,7 @@ const testimonials = [
     name: 'Marcus Rodriguez',
     role: 'Product Manager',
     company: 'StartupX',
-    avatar: 'MR',
+    initials: 'MR',
     content: 'The ATS score breakdown was eye-opening. I fixed my keywords and landed my dream role at a FAANG company.',
     rating: 5,
   },
@@ -131,7 +130,7 @@ const testimonials = [
     name: 'Priya Sharma',
     role: 'Recent Graduate',
     company: 'University',
-    avatar: 'PS',
+    initials: 'PS',
     content: 'Fresher Mode walked me through my first CV. No experience needed - my projects and internships counted.',
     rating: 5,
   },
@@ -142,28 +141,25 @@ export default function Landing() {
 
   const handleNewsletter = (e) => {
     e.preventDefault();
-    alert('Thanks for subscribing!');
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Navigation is handled by App.jsx Navbar */}
-      
       {/* Hero Section */}
       <section className="relative px-4 py-16 sm:py-24 lg:py-32 overflow-hidden">
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-semibold border border-primary/20">
-                <Sparkles className="w-4 h-4" />
-                New: AI Cover Letter Generator
+              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary sm:text-sm">
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span className="leading-snug">New: AI Cover Letter Generator</span>
               </div>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight tracking-tight">
-                Build a Resume That <br />
-                <span className="text-primary">Gets You Hired</span>
+              <h1 className="text-[clamp(1.65rem,8vw,3.75rem)] font-bold text-foreground leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+                <span className="block">Build a Resume That</span>
+                <span className="block text-primary">Gets You Hired</span>
               </h1>
               <p className="text-lg text-muted-foreground max-w-lg leading-relaxed">
-                AI-powered resume builder and analyzer. Get instant ATS scores, keyword matching, and professional PDF exports. Join 50,000+ job seekers getting hired faster.
+                AI-powered resume builder and analyzer. Get instant ATS scores, keyword matching, and professional PDF exports.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button variant="primary" size="lg" asChild className="w-full sm:w-auto">
@@ -178,14 +174,14 @@ export default function Landing() {
                   </Link>
                 </Button>
               </div>
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-success" />
+                  <Check className="h-4 w-4 shrink-0 text-success" />
                   <span>No credit card required</span>
                 </div>
-                <div className="w-px h-4 bg-muted mx-2" />
+                <div className="hidden h-4 w-px bg-border sm:block" />
                 <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
+                  <Clock className="h-4 w-4 shrink-0" />
                   <span>Setup in under 2 minutes</span>
                 </div>
               </div>
@@ -204,7 +200,9 @@ export default function Landing() {
                 </div>
                 <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                   <div className="text-2xl font-bold text-gray-900">Aarav Kumar</div>
-                  <div className="text-sm text-gray-500 mb-2">aarav.kumar@email.com • Pune, India</div>
+                  <div className="mb-2 break-words text-sm text-gray-500">
+                    aarav.kumar@email.com • Pune, India
+                  </div>
                   <div className="mb-2">
                     <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Summary</div>
                     <p className="text-sm text-gray-600">
@@ -274,26 +272,26 @@ export default function Landing() {
       </section>
 
       {/* Pricing Section */}
-      <section className="px-4 py-20">
+      <section id="pricing" className="scroll-mt-20 px-4 py-16 sm:py-20">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
+          <div className="mb-12 text-center sm:mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground">Simple, transparent pricing</h2>
             <p className="text-lg text-muted-foreground mt-2">Choose the plan that fits your job search journey</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid gap-6 md:grid-cols-3 lg:gap-8">
             {pricingPlans.map((plan) => (
               <Card
                 key={plan.name}
-                padding="lg"
+                padding="none"
                 className={cn(
-                  'relative flex flex-col',
+                  'relative flex flex-col p-6 sm:p-8',
                   plan.popular
-                    ? 'border-primary bg-primary/5 shadow-lg scale-[1.02] z-10'
+                    ? 'z-10 border-primary bg-primary/5 shadow-lg lg:scale-[1.02]'
                     : 'border-border hover:border-primary/50'
                 )}
               >
                 {plan.popular && (
-                  <Badge className="absolute -top-3 right-6 bg-accent text-on-accent">
+                  <Badge className="absolute -top-3 right-4 bg-accent text-on-accent sm:right-6">
                     Most Popular
                   </Badge>
                 )}
@@ -320,7 +318,7 @@ export default function Landing() {
                   variant={plan.ctaVariant}
                   size="lg"
                   className="w-full"
-                  onClick={() => alert(`${plan.name} plan selected`)}
+                  onClick={() => {}}
                 >
                   {plan.cta}
                 </Button>
@@ -341,7 +339,9 @@ export default function Landing() {
             {testimonials.map((t) => (
               <Card key={t.name} padding="md" className="hover:shadow-lg transition-shadow">
                 <div className="flex items-center gap-3 mb-4">
-                  <Avatar src={null} name={t.name} size="sm" />
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-semibold text-sm">
+                    {t.initials}
+                  </div>
                   <div>
                     <div className="text-sm font-semibold text-foreground">{t.name}</div>
                     <div className="text-xs text-muted-foreground">{t.role}, {t.company}</div>
@@ -353,7 +353,7 @@ export default function Landing() {
                   ))}
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                  "{t.content}"
+                  &quot;{t.content}&quot;
                 </p>
               </Card>
             ))}
@@ -381,25 +381,13 @@ export default function Landing() {
                   Start Building Free
                 </Link>
               </Button>
-              <Button variant="outline" size="lg" className="w-full sm:w-auto border-white text-white">
-                View Pricing
+              <Button variant="outline" size="lg" asChild className="w-full border-white text-white sm:w-auto">
+                <a href="#pricing">View Pricing</a>
               </Button>
             </div>
           </div>
         </div>
       </section>
-
-      <Footer />
-    </div>
-  );
-}
-
-function Avatar({ src, name, size = 'sm' }) {
-  const sizes = { sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-12 h-12 text-base' };
-  const initials = name ? name.split(' ').map(n => n[0]).join('').toUpperCase() : '?';
-  return (
-    <div className={cn('rounded-full flex-shrink-0 flex items-center justify-center font-semibold bg-muted', sizes[size])}>
-      {initials}
     </div>
   );
 }

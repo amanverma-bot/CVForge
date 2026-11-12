@@ -15,13 +15,21 @@ function securityHeaders() {
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'"],
-        scriptSrc: ["'self'"],
+        connectSrc: [
+          "'self'",
+          "https://identitytoolkit.googleapis.com",
+          "https://securetoken.googleapis.com",
+          "https://www.googleapis.com",
+          "https://apis.google.com",
+        ],
+        scriptSrc: ["'self'", "https://apis.google.com", "https://www.gstatic.com"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
+        frameSrc: ["'self'", "https://accounts.google.com", "https://cvforge-ca97c.firebaseapp.com"],
         frameAncestors: ["'none'"],
       },
     },
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
     crossOriginEmbedderPolicy: false,
     hsts: {
       maxAge: 31536000,
@@ -91,8 +99,20 @@ function httpsRedirect(req, res, next) {
 }
 
 function configureCors(env) {
+  if (env.NODE_ENV !== "production") {
+    addOrigin("http://localhost:5173");
+  }
   const frontend = env.FRONTEND_URL || "";
-  if (frontend) addOrigin(frontend.trim());
+  if (!frontend) return;
+  for (const origin of frontend.split(",")) {
+    const value = origin.trim();
+    if (!value) continue;
+    try {
+      addOrigin(new URL(value).origin);
+    } catch {
+      // env.js already rejects malformed values; never add a partial origin.
+    }
+  }
 }
 
 module.exports = { securityHeaders, buildCors, httpsRedirect, configureCors, addOrigin, ALLOWED_ORIGINS };

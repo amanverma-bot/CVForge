@@ -6,6 +6,7 @@
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.2",
+    "firebase-admin": "^14.5.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mammoth": "^1.13.0",
@@ -27,7 +28,11 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "node ./node_modules/vitest/vitest.mjs run",
+    "verify:local": "node scripts/verify_local_llm.mjs",
+    "local:start": "bash scripts/start_local_llm.sh start",
+    "local:stop": "bash scripts/start_local_llm.sh stop",
+    "local:status": "bash scripts/start_local_llm.sh status"
   },
   "keywords": [],
   "author": "",
