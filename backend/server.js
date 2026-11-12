@@ -5,7 +5,7 @@ require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const env = require("./config/env");
 const { logger } = require("./lib/logger");
 const app = require("./app");
-const { connect, isMongo } = require("./models/store");
+const { connect, isMongo, storage } = require("./models/store");
 
 const PORT = env.PORT;
 
@@ -14,10 +14,12 @@ async function start() {
   await connect(env.MONGO_URI);
 
   const server = app.listen(PORT, "0.0.0.0", () => {
-    logger.info({ port: PORT, env: env.NODE_ENV, mongo: isMongo }, "CVForge server started");
+    logger.info({ port: PORT, env: env.NODE_ENV, mongo: isMongo(), storage: storage() }, "CVForge server started");
     console.log(`CVForge backend running on http://0.0.0.0:${PORT}`);
     console.log(`Environment: ${env.NODE_ENV}`);
-    console.log(`Database: ${isMongo ? "MongoDB" : "in-memory (demo)"}`);
+    console.log(
+      `Database: ${isMongo() ? "MongoDB" : storage() === "file" ? "file-backed store (persists across restarts)" : "in-memory (demo)"}`
+    );
   });
 
   process.on("unhandledRejection", (err) => {

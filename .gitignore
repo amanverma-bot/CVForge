@@ -16,6 +16,9 @@ backend/.env.development
 *.log
 .DS_Store
 
+# Local file-backed store (used only when MONGO_URI is unset)
+backend/data/
+
 # Firebase Admin service-account material must live outside this repository.
 # These patterns are defense in depth; backend env validation also rejects
 # in-repo or group/world-readable key files.

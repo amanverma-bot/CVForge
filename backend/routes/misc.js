@@ -26,6 +26,7 @@ router.get("/health", asyncHandler(async (_req, res) => {
   res.json({
     ok: true,
     mongo: store.isMongo(),
+    storage: store.storage(),
     llm: ai.available,
     ai,
     time: new Date().toISOString(),

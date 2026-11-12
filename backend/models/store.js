@@ -3,7 +3,51 @@
 // All queries are scoped by userId — no IDOR possible.
 
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const mongoose = require("mongoose");
+
+// ── Optional file-backed persistence when MongoDB is not configured ──
+// Keeps the in-memory fallback useful across restarts (local/dev/demo).
+const DATA_DIR = path.join(__dirname, "..", "data");
+const DATA_FILE = path.join(DATA_DIR, "store.json");
+let fileStore = false;
+
+function persist() {
+  if (!fileStore || isMongo) return;
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = DATA_FILE + ".tmp";
+    fs.writeFileSync(
+      tmp,
+      JSON.stringify({
+        users: memoryStore.users,
+        cvs: memoryStore.cvs,
+        analyses: memoryStore.analyses,
+        applications: memoryStore.applications,
+      })
+    );
+    fs.renameSync(tmp, DATA_FILE);
+  } catch (err) {
+    console.error("⚠️  Could not persist local store:", err.message);
+  }
+}
+
+function loadFileStore() {
+  fileStore = true;
+  try {
+    const raw = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+    memoryStore.users = Array.isArray(raw.users) ? raw.users : [];
+    memoryStore.cvs = Array.isArray(raw.cvs) ? raw.cvs : [];
+    memoryStore.analyses = Array.isArray(raw.analyses) ? raw.analyses : [];
+    memoryStore.applications = Array.isArray(raw.applications) ? raw.applications : [];
+    console.log(
+      `💾 Loaded file store (${memoryStore.users.length} users, ${memoryStore.cvs.length} CVs) from ${DATA_FILE}`
+    );
+  } catch {
+    /* first run — nothing persisted yet */
+  }
+}
 
 let isMongo = false;
 let db = null;
@@ -128,6 +172,8 @@ const memoryStore = {
 async function connect(mongoUri) {
   if (!mongoUri) {
     isMongo = false;
+    loadFileStore();
+    console.log("💾 No MONGO_URI — file-backed store (data persists across restarts)");
     return;
   }
   try {
@@ -140,6 +186,7 @@ async function connect(mongoUri) {
   } catch (err) {
     console.warn("⚠️  MongoDB connection failed, using in-memory store:", err.message);
     isMongo = false;
+    if (!fileStore) loadFileStore();
   }
 }
 
@@ -165,6 +212,7 @@ async function createUser({ name, email, passwordHash }) {
   const id = Math.random().toString(36).slice(2, 11);
   const user = { id, name, email: normalizedEmail, passwordHash, role: "free", tokenVersion: 0, createdAt: new Date().toISOString() };
   memoryStore.users.push(user);
+  persist();
   return publicUser(user);
 }
 
@@ -198,6 +246,7 @@ async function incrementTokenVersion(userId) {
   const user = memoryStore.users.find((u) => u.id === userId);
   if (!user) return false;
   user.tokenVersion = Number(user.tokenVersion || 0) + 1;
+  persist();
   return true;
 }
 
@@ -258,6 +307,7 @@ async function linkOAuthAccount(userId, { provider, providerId, avatar }) {
   }
   user[field] = value;
   if (avatar && !user.avatar) user.avatar = String(avatar).slice(0, 500);
+  persist();
   return publicUser(user);
 }
 
@@ -301,6 +351,7 @@ async function createOAuthUser({ name, email, provider, providerId, avatar }) {
     createdAt: new Date().toISOString(),
   };
   memoryStore.users.push(user);
+  persist();
   return publicUser(user);
 }
 
@@ -314,6 +365,7 @@ async function createCV({ userId, ...data }) {
   const id = Math.random().toString(36).slice(2, 11);
   const cv = { id, userId, ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   memoryStore.cvs.push(cv);
+  persist();
   return cv;
 }
 
@@ -345,6 +397,7 @@ async function updateCV(id, userId, data) {
   const cv = memoryStore.cvs.find((c) => c.id === id && c.userId === userId);
   if (!cv) return null;
   Object.assign(cv, data, { updatedAt: new Date().toISOString() });
+  persist();
   return cv;
 }
 
@@ -364,6 +417,7 @@ async function shareCV(id, userId) {
   const token = newShareToken();
   cv.shareToken = token;
   cv.sharedAt = new Date().toISOString();
+  persist();
   return { token, url: `/s/${token}` };
 }
 
@@ -377,6 +431,7 @@ async function revokeShare(id, userId) {
   if (!cv) return false;
   delete cv.shareToken;
   delete cv.sharedAt;
+  persist();
   return true;
 }
 
@@ -397,6 +452,7 @@ async function saveAnalysis({ userId, cvId, scoreData, missingKeywords, suggesti
   const id = Math.random().toString(36).slice(2, 11);
   const analysis = { id, userId, cvId, scoreData, missingKeywords, suggestions, overall, verdict, cvText, jdText, resultJson, createdAt: new Date().toISOString() };
   memoryStore.analyses.push(analysis);
+  persist();
   return analysis;
 }
 
@@ -419,6 +475,7 @@ async function createApplication({ userId, ...data }) {
   const id = Math.random().toString(36).slice(2, 11);
   const app = { id, userId, ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   memoryStore.applications.push(app);
+  persist();
   return app;
 }
 
@@ -437,6 +494,7 @@ async function updateApplication(id, userId, data) {
   const app = memoryStore.applications.find((a) => a.id === id && a.userId === userId);
   if (!app) return null;
   Object.assign(app, data, { updatedAt: new Date().toISOString() });
+  persist();
   return app;
 }
 
@@ -449,6 +507,7 @@ async function deleteApplication(id, userId) {
   const idx = memoryStore.applications.findIndex((a) => a.id === id && a.userId === userId);
   if (idx === -1) return false;
   memoryStore.applications.splice(idx, 1);
+  persist();
   return true;
 }
 
@@ -493,12 +552,14 @@ async function deleteAccount(userId) {
   memoryStore.cvs = memoryStore.cvs.filter((c) => c.userId !== userId);
   memoryStore.analyses = memoryStore.analyses.filter((a) => a.userId !== userId);
   memoryStore.applications = memoryStore.applications.filter((a) => a.userId !== userId);
+  persist();
   return true;
 }
 
 module.exports = {
   connect,
   isMongo: isMongoConnected,
+  storage: () => (isMongo ? "mongo" : fileStore ? "file" : "memory"),
   createUser,
   findUser,
   getUserById,
