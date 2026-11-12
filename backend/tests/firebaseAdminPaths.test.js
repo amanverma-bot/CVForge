@@ -138,12 +138,21 @@ describe("Firebase Admin service-account path validation", () => {
 
   it("rejects a symlink whose resolved target is inside the repository", () => {
     const result = withTempDir((dir) => {
-      const link = path.join(dir, "link-to-repo.json");
-      fs.symlinkSync(path.join(REPO, "backend", ".env"), link);
-      return runEnvValidation({
-        FIREBASE_PROJECT_ID: PROJECT_ID,
-        FIREBASE_SERVICE_ACCOUNT_PATH: link,
-      });
+      // Point at a file we create inside the repo: backend/.env is gitignored and
+      // may be absent in a clean checkout, in which case resolution fails first
+      // and the containment check this test targets never runs.
+      const inRepoTarget = path.join(REPO, "backend", ".firebase-key-test-target.json");
+      fs.writeFileSync(inRepoTarget, "{}", { mode: 0o600 });
+      try {
+        const link = path.join(dir, "link-to-repo.json");
+        fs.symlinkSync(inRepoTarget, link);
+        return runEnvValidation({
+          FIREBASE_PROJECT_ID: PROJECT_ID,
+          FIREBASE_SERVICE_ACCOUNT_PATH: link,
+        });
+      } finally {
+        fs.rmSync(inRepoTarget, { force: true });
+      }
     });
     expect(result.ok).toBe(false);
     expect(result.status).not.toBe(0);
