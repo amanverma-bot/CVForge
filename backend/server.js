@@ -5,20 +5,22 @@ require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const env = require("./config/env");
 const { logger } = require("./lib/logger");
 const app = require("./app");
-const { connect, isMongo, storage } = require("./models/store");
+const { connect, isMongo: isMongoConnected, storage } = require("./models/store");
 
 const PORT = env.PORT;
 
 async function start() {
-  // Connect to MongoDB (falls back to in-memory if no URI)
+  // Connect to MongoDB. With no URI — or REQUIRE_MONGO=false and an
+  // unreachable URI — the file-backed local store is used (persists across
+  // restarts); REQUIRE_MONGO=true fails fast instead of falling back.
   await connect(env.MONGO_URI);
 
   const server = app.listen(PORT, "0.0.0.0", () => {
-    logger.info({ port: PORT, env: env.NODE_ENV, mongo: isMongo(), storage: storage() }, "CVForge server started");
+    logger.info({ port: PORT, env: env.NODE_ENV, mongo: isMongoConnected(), storage: storage() }, "CVForge server started");
     console.log(`CVForge backend running on http://0.0.0.0:${PORT}`);
     console.log(`Environment: ${env.NODE_ENV}`);
     console.log(
-      `Database: ${isMongo() ? "MongoDB" : storage() === "file" ? "file-backed store (persists across restarts)" : "in-memory (demo)"}`
+      `Database: ${isMongoConnected() ? "MongoDB" : storage() === "file" ? "file-backed store (persists across restarts)" : "in-memory (demo)"}`
     );
   });
 

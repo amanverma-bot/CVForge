@@ -28,6 +28,7 @@ function createLimiter(options = {}) {
     max = 100,
     message = "Too many requests, please try again later.",
     skipFailedRequests = false,
+    keyByUser = false,
   } = options;
   const store = getStore(options.name || "default");
 
@@ -36,7 +37,9 @@ function createLimiter(options = {}) {
       return next();
     }
 
-    const key = keyGenerator(req);
+    // Per-user buckets when the limiter runs after requireAuth and opts in;
+    // anonymous/IP-based otherwise.
+    const key = keyByUser && req.user?.id ? `u:${req.user.id}` : keyGenerator(req);
     const now = Date.now();
     cleanup(store);
 
@@ -103,6 +106,15 @@ const shareLimiter = createLimiter({
   message: "Share link rate limit exceeded",
 });
 
+// Gemini features are free-tier sensitive: 10 requests/minute per user.
+const geminiLimiter = createLimiter({
+  name: "gemini",
+  windowMs: 60 * 1000,
+  max: 10,
+  keyByUser: true,
+  message: "Gemini AI rate limit exceeded — max 10 requests per minute",
+});
+
 module.exports = {
   globalLimiter,
   authLimiter,
@@ -110,5 +122,6 @@ module.exports = {
   uploadLimiter,
   exportLimiter,
   shareLimiter,
+  geminiLimiter,
   createLimiter,
 };

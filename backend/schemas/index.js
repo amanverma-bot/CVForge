@@ -150,6 +150,16 @@ const match = z.object({
     .max(10, "Max 10 jobs per request"),
 });
 
+const skills = z.object({
+  cv_text: required(30000),
+});
+
+const career = z.object({
+  cv_text: required(30000),
+  jd_text: optional(30000),
+  target_role: optional(120),
+});
+
 const practice = z.object({
   cv_text: required(20000),
   jd_text: required(20000),
@@ -227,6 +237,8 @@ module.exports = {
   cvJdPair,
   coverLetter,
   match,
+  skills,
+  career,
   practice,
   evaluate,
   pdf,

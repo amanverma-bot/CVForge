@@ -1,5 +1,6 @@
 // AI routes (auth required on every one): analyze, quickfix, build, JD breakdown,
-// JD-tailored CV, enhance, cover letter, mock interview, matcher, grammar, practice.
+// JD-tailored CV, enhance, cover letter, mock interview, matcher, skills,
+// career, grammar, practice.
 const express = require("express");
 const scoring = require("../lib/scoring");
 const ai = require("../services/aiService");
@@ -9,7 +10,7 @@ const { upload, verifyUploads } = require("../middleware/upload");
 const { validate } = require("../middleware/validate");
 const { requireAuth } = require("../middleware/auth");
 const { asyncHandler, AppError } = require("../middleware/error");
-const { aiLimiter, uploadLimiter } = require("../middleware/rateLimit");
+const { aiLimiter, uploadLimiter, geminiLimiter } = require("../middleware/rateLimit");
 
 const router = express.Router();
 
@@ -149,6 +150,27 @@ router.post(
   asyncHandler(async (req, res) => {
     const { cv_text, jobs } = req.body;
     res.json(await ai.matchJobs(cv_text, jobs));
+  })
+);
+
+router.post(
+  "/skills",
+  requireAuth,
+  geminiLimiter,
+  validate({ body: schemas.skills }),
+  asyncHandler(async (req, res) => {
+    res.json(await ai.skillsWithAI(req.body.cv_text));
+  })
+);
+
+router.post(
+  "/career",
+  requireAuth,
+  geminiLimiter,
+  validate({ body: schemas.career }),
+  asyncHandler(async (req, res) => {
+    const { cv_text, jd_text = "", target_role = "" } = req.body;
+    res.json(await ai.careerWithAI(cv_text, jd_text, target_role));
   })
 );
 

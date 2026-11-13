@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const mongoose = require("mongoose");
+const env = require("../config/env");
 
 // ── Optional file-backed persistence when MongoDB is not configured ──
 // Keeps the in-memory fallback useful across restarts (local/dev/demo).
@@ -184,8 +185,18 @@ async function connect(mongoUri) {
     isMongo = true;
     console.log("✓ Connected to MongoDB");
   } catch (err) {
-    console.warn("⚠️  MongoDB connection failed, using in-memory store:", err.message);
     isMongo = false;
+    // Surface only the driver message — never echo the URI (it contains credentials).
+    const reason = err && err.message ? err.message : "unknown error";
+    if (env.REQUIRE_MONGO) {
+      console.error(
+        "✗ MongoDB connection failed — REQUIRE_MONGO is enabled, so the server will not start on the fallback store."
+      );
+      throw err;
+    }
+    console.warn(
+      `⚠️  MongoDB connection failed (${reason}). Falling back to the file-backed store; set REQUIRE_MONGO=true to fail fast instead.`
+    );
     if (!fileStore) loadFileStore();
   }
 }

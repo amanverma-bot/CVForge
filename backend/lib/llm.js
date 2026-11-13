@@ -1,7 +1,9 @@
 // ── LLM Integration ────────────────────────────────────────────────────────
-// OpenAI-compatible LLM client with OpenAI primary, local secondary, and
-// graceful offline fallbacks. Uses native fetch (Node 18+).
+// Provider chain: Gemini (cloud, primary) → OpenAI (cloud) → local LLM →
+// graceful offline fallbacks. Gemini goes through lib/gemini.js (official
+// SDK); OpenAI/local use the OpenAI-compatible REST API with native fetch.
 const env = require("../config/env");
+const gemini = require("./gemini");
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:11434/v1";
@@ -23,11 +25,13 @@ const healthTimeoutMs = env.LLM_HEALTH_TIMEOUT_MS || 2500;
 const healthCacheMs = env.LLM_HEALTH_CACHE_MS || 30000;
 
 const PROVIDERS = {
+  gemini: { label: "Gemini", kind: "cloud" },
   openai: { label: "OpenAI", kind: "cloud" },
   local: { label: "Local LLM", kind: "local" },
 };
 
 const providerHealth = {
+  gemini: { available: null, checkedAt: 0, lastSuccessAt: 0, lastError: null, model: null },
   openai: { available: null, checkedAt: 0, lastSuccessAt: 0, lastError: null, model: null },
   local: { available: null, checkedAt: 0, lastSuccessAt: 0, lastError: null, model: null },
 };
@@ -95,11 +99,23 @@ function resetHealth() {
   healthSource = "startup";
   healthLastSuccessAt = 0;
   healthInFlight = null;
+  providerHealth.gemini = { available: null, checkedAt: 0, lastSuccessAt: 0, lastError: null, model: null };
   providerHealth.openai = { available: null, checkedAt: 0, lastSuccessAt: 0, lastError: null, model: null };
   providerHealth.local = { available: null, checkedAt: 0, lastSuccessAt: 0, lastError: null, model: null };
 }
 
 function providerConfig(name) {
+  if (name === "gemini") {
+    return {
+      name,
+      label: "Gemini",
+      baseUrl: null,
+      apiKey: null,
+      model: env.GEMINI_MODEL || "gemini-3.8-flash",
+      timeoutMs: env.GEMINI_TIMEOUT_MS || 30000,
+      configured: gemini.configured(),
+    };
+  }
   if (name === "openai") {
     return { name, label: "OpenAI", baseUrl, apiKey, model, timeoutMs: requestTimeoutMs, configured: hasKey() };
   }
@@ -131,6 +147,10 @@ function isRetryableLocalError(error) {
 
 async function requestCompletionOnce(name, messages, options = {}) {
   const cfg = providerConfig(name);
+  if (name === "gemini") {
+    // gemini.requestCompletion handles its own fallback-model retry.
+    return gemini.requestCompletion(messages, options);
+  }
   if (name === "openai" && !cfg.configured) {
     return { content: null, error: "No LLM API key configured" };
   }
@@ -223,6 +243,7 @@ function recordFailure(name, error) {
 
 function providerOrder() {
   const order = [];
+  if (gemini.configured()) order.push("gemini");
   if (hasKey()) order.push("openai");
   if (isLocalConfigured()) order.push("local");
   return order;
@@ -575,6 +596,7 @@ function statusSnapshot() {
     lastSuccessAt: isoTime(healthLastSuccessAt),
     source: healthSource,
     providers: {
+      gemini: providerSnapshot("gemini"),
       openai: providerSnapshot("openai"),
       local: providerSnapshot("local"),
     },
@@ -630,6 +652,7 @@ async function probeCompletion(name, timeoutMs) {
 function canProbeCompletion(name) {
   const cfg = providerConfig(name);
   if (!cfg.configured) return false;
+  if (name === "gemini") return false; // cloud provider: never probed
   return name === "local" || isLoopbackBaseUrl(cfg.baseUrl);
 }
 
@@ -645,6 +668,21 @@ async function healthStatus(options = {}) {
   const generation = healthGeneration;
   const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : healthTimeoutMs;
   const run = (async () => {
+    // Gemini is a paid cloud API: never probed — availability comes only from
+    // real traffic (recordSuccess/recordFailure).
+    let geminiProbe;
+    if (providerHealth.gemini.available === true) {
+      geminiProbe = { available: true, error: null, checkedAt: providerHealth.gemini.checkedAt };
+    } else {
+      geminiProbe = {
+        available: false,
+        error: gemini.configured()
+          ? "Gemini not verified: health checks never make paid API calls; an actual completion is required"
+          : "Not configured",
+        checkedAt: Date.now(),
+      };
+    }
+
     const openaiConfigured = providerConfig("openai").configured;
     let openai;
     if (providerHealth.openai.available === true) {
@@ -676,10 +714,17 @@ async function healthStatus(options = {}) {
 
     if (generation !== healthGeneration) return statusSnapshot();
 
+    setProbeState("gemini", geminiProbe);
     setProbeState("openai", openai);
     setProbeState("local", local);
 
-    activeProvider = openai.available ? "openai" : local.available ? "local" : "offline";
+    activeProvider = geminiProbe.available
+      ? "gemini"
+      : openai.available
+        ? "openai"
+        : local.available
+          ? "local"
+          : "offline";
     healthCheckedAt = Date.now();
     healthSource = "completion-probe";
     healthLastSuccessAt = activeProvider === "offline" ? 0 : providerHealth[activeProvider].lastSuccessAt;
@@ -713,4 +758,5 @@ module.exports = {
   healthStatus,
   statusSnapshot,
   currentEngine,
+  providerOrder,
 };

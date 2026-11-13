@@ -4,9 +4,17 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import http from "node:http";
 import { createRequire } from "node:module";
 import ai from "../services/aiService.js";
+import envEsm from "../config/env.js";
 
 const require = createRequire(import.meta.url);
 const llm = require("../lib/llm.js");
+
+// Hermetic guard: ambient backend/.env may contain a live GEMINI_API_KEY.
+// Blank it in every possible env-graph instance so the pinned
+// OpenAI -> local -> offline chain never reaches the real Gemini API.
+const envCjs = require("../config/env.js");
+envEsm.GEMINI_API_KEY = "";
+envCjs.GEMINI_API_KEY = "";
 
 const servers = [];
 

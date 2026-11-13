@@ -252,6 +252,8 @@
     "/api/cover-letter": { "post": { "tags": ["AI"], "summary": "Generate a tailored cover letter", "responses": { "200": { "description": "letter" } } } },
     "/api/mock-interview": { "post": { "tags": ["AI"], "summary": "Generate mock interview questions", "responses": { "200": { "description": "questions[]" } } } },
     "/api/match": { "post": { "tags": ["AI"], "summary": "Rank one CV against up to 10 JDs", "responses": { "200": { "description": "ranking[]" } } } },
+    "/api/skills": { "post": { "tags": ["AI"], "summary": "Gemini: extract demonstrated CV skills (offline fallback)", "responses": { "200": { "description": "skills[]" } } } },
+    "/api/career": { "post": { "tags": ["AI"], "summary": "Gemini: career roles, strengths, gaps, roadmap (offline fallback)", "responses": { "200": { "description": "target_roles, strengths, gaps, roadmap" } } } },
     "/api/grammar": { "post": { "tags": ["AI"], "summary": "Offline grammar/spelling screen", "responses": { "200": { "description": "issues[]" } } } },
     "/api/practice": { "post": { "tags": ["AI"], "summary": "Interview practice questions", "responses": { "200": { "description": "questions[]" } } } },
     "/api/practice/evaluate": { "post": { "tags": ["AI"], "summary": "STAR-score answers 0-10", "responses": { "200": { "description": "results, avg, level" } } } },

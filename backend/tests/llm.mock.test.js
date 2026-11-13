@@ -4,6 +4,16 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import http from "node:http";
 import llm from "../lib/llm.js";
+import envEsm from "../config/env.js";
+import { createRequire } from "node:module";
+
+// Hermetic guard: ambient backend/.env may now contain a live GEMINI_API_KEY.
+// Blank it in every possible env-graph instance (static-import and native
+// require) so these OpenAI-chain tests never reach the real Gemini API.
+const require = createRequire(import.meta.url);
+const envCjs = require("../config/env.js");
+envEsm.GEMINI_API_KEY = "";
+envCjs.GEMINI_API_KEY = "";
 
 const SECRET = "sk-test-mock-secret-123";
 

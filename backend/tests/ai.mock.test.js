@@ -53,6 +53,11 @@ server = await start(mockCompletion);
 process.env.OPENAI_API_KEY = SECRET;
 process.env.OPENAI_MODEL = "mock";
 process.env.OPENAI_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`;
+// Hermetic guard: ambient backend/.env may contain a live GEMINI_API_KEY;
+// blank it so these OpenAI-mock tests never reach the real Gemini API.
+// (Same native env instance the app loads — the require cache is shared.)
+const env = require("../config/env.js");
+env.GEMINI_API_KEY = "";
 const { default: app } = await import("../app.js");
 const llm = require("../lib/llm.js");
 api = request(app);
